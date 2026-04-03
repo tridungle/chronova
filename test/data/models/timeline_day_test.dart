@@ -10,6 +10,8 @@ void main() {
     double? latitude,
     double? longitude,
     String? locationName,
+    String? mood,
+    String? note,
   }) {
     return Photo(
       id: id,
@@ -18,6 +20,8 @@ void main() {
       latitude: latitude,
       longitude: longitude,
       locationName: locationName,
+      mood: mood,
+      note: note,
       createdAt: now,
       updatedAt: now,
     );
@@ -240,6 +244,61 @@ void main() {
 
     test('unknownLabel is "Unknown Location"', () {
       expect(LocationGroup.unknownLabel, 'Unknown Location');
+    });
+
+    group('mood', () {
+      test('returns first non-null mood from photos', () {
+        final photos = [
+          makePhoto(id: 'p1'),
+          makePhoto(id: 'p2', mood: '😊'),
+          makePhoto(id: 'p3', mood: '🎉'),
+        ];
+        final group = LocationGroup(label: 'Test', photos: photos);
+        expect(group.mood, '😊');
+      });
+
+      test('returns null when no photos have mood', () {
+        final photos = [makePhoto(id: 'p1'), makePhoto(id: 'p2')];
+        final group = LocationGroup(label: 'Test', photos: photos);
+        expect(group.mood, isNull);
+      });
+
+      test('returns null for empty photo list', () {
+        final group = LocationGroup(label: 'Test', photos: []);
+        expect(group.mood, isNull);
+      });
+    });
+
+    group('note', () {
+      test('returns first non-null non-empty note from photos', () {
+        final photos = [
+          makePhoto(id: 'p1'),
+          makePhoto(id: 'p2', note: 'Great view!'),
+          makePhoto(id: 'p3', note: 'Also nice'),
+        ];
+        final group = LocationGroup(label: 'Test', photos: photos);
+        expect(group.note, 'Great view!');
+      });
+
+      test('skips empty string notes', () {
+        final photos = [
+          makePhoto(id: 'p1', note: ''),
+          makePhoto(id: 'p2', note: 'Real note'),
+        ];
+        final group = LocationGroup(label: 'Test', photos: photos);
+        expect(group.note, 'Real note');
+      });
+
+      test('returns null when no photos have notes', () {
+        final photos = [makePhoto(id: 'p1'), makePhoto(id: 'p2')];
+        final group = LocationGroup(label: 'Test', photos: photos);
+        expect(group.note, isNull);
+      });
+
+      test('returns null for empty photo list', () {
+        final group = LocationGroup(label: 'Test', photos: []);
+        expect(group.note, isNull);
+      });
     });
   });
 

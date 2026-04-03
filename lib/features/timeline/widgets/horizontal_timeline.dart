@@ -355,9 +355,23 @@ class _HorizontalDayCard extends StatelessWidget {
                 ),
 
                 // Location sub-groups with thumbnails — shown when
-                // there are multiple locations on this day
+                // there are multiple locations on this day.
+                // Wrapped in Expanded + SingleChildScrollView to prevent
+                // vertical overflow when many location groups are present.
                 if (day.hasMultipleLocations)
-                  ..._buildLocationThumbnailSections(context, colorScheme)
+                  Expanded(
+                    flex: 2,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _buildLocationThumbnailSections(
+                          context,
+                          colorScheme,
+                          isDark,
+                        ),
+                      ),
+                    ),
+                  )
                 else if (day.photos.length > 1)
                   // Single-location thumbnail strip (original)
                   _buildThumbnailStrip(day.photos),
@@ -370,7 +384,8 @@ class _HorizontalDayCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          if (day.mood != null) ...[
+                          if (!day.hasMultipleLocations &&
+                              day.mood != null) ...[
                             Text(
                               day.mood!,
                               style: const TextStyle(fontSize: 20),
@@ -387,7 +402,9 @@ class _HorizontalDayCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (day.note != null && day.note!.isNotEmpty) ...[
+                      if (!day.hasMultipleLocations &&
+                          day.note != null &&
+                          day.note!.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
                           day.note!,
@@ -459,16 +476,33 @@ class _HorizontalDayCard extends StatelessWidget {
 
   /// Build location-labeled thumbnail sections for multi-location days.
   ///
-  /// Each location group gets a small label followed by its thumbnails.
+  /// Each location group gets a label with mood, thumbnails, and note preview.
   List<Widget> _buildLocationThumbnailSections(
     BuildContext context,
     ColorScheme colorScheme,
+    bool isDark,
   ) {
     final sections = <Widget>[];
 
-    for (final group in day.locationGroups) {
+    for (int i = 0; i < day.locationGroups.length; i++) {
+      final group = day.locationGroups[i];
       if (group.photos.isEmpty) continue;
 
+      // Divider between groups (not before the first)
+      if (i > 0) {
+        sections.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Divider(
+              height: 8,
+              thickness: 0.5,
+              color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+          ),
+        );
+      }
+
+      // Location label + mood + count
       sections.add(
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
@@ -498,6 +532,10 @@ class _HorizontalDayCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (group.mood != null) ...[
+                Text(group.mood!, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 4),
+              ],
               Text(
                 '${group.photos.length}',
                 style: TextStyle(
@@ -511,6 +549,7 @@ class _HorizontalDayCard extends StatelessWidget {
         ),
       );
 
+      // Thumbnail strip
       sections.add(
         SizedBox(
           height: 52,
@@ -518,10 +557,8 @@ class _HorizontalDayCard extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             itemCount: group.photos.length.clamp(0, 8),
-            itemBuilder: (ctx, i) {
-              final photo = group.photos[i];
-              // Determine photo index in the full day's photo list for
-              // correct navigation in PhotoDetailScreen
+            itemBuilder: (ctx, j) {
+              final photo = group.photos[j];
               final dayIndex = day.photos
                   .indexOf(photo)
                   .clamp(0, day.photos.length - 1);
@@ -560,6 +597,25 @@ class _HorizontalDayCard extends StatelessWidget {
           ),
         ),
       );
+
+      // Note preview for this location group
+      if (group.note != null && group.note!.isNotEmpty) {
+        sections.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
+            child: Text(
+              group.note!,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: isDark ? Colors.grey[300] : Colors.grey[600],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+      }
     }
 
     return sections;

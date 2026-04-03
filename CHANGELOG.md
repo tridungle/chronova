@@ -1,5 +1,27 @@
 # Changelog
 
+## Session 8 — 2026-04-03 (Timeline Layout Refinements)
+
+### Added
+
+- **`LocationGroup.mood` and `LocationGroup.note` computed getters** — Each location sub-group now derives its own mood emoji and note from the first photo in the group that has a non-null value. This enables per-location mood/note display in both timeline views.
+- 7 new tests for `LocationGroup.mood` and `LocationGroup.note` getters: empty list, no mood/note, first non-null value, skips empty strings.
+
+### Changed
+
+- **Vertical timeline: Date header above collage** — Refactored `_DayCard` to render the date + mood + count badge + optional location row ABOVE the photo collage instead of below it. Extracted `_buildDateHeader()` method. Removed `_buildInfoSection()` — its responsibilities split between the new date header (above collage) and inline note widget (below collage). Renamed `_buildMultiLocationSection()` → `_buildLocationSubGroups()` (no longer includes date header).
+  - Multi-location layout: date header → collage → location sub-groups (each with label + mood, thumbnail strip, note)
+  - Single-location layout: date header (with location) → collage → note preview
+- **Horizontal timeline: Fixed RenderFlex overflow** — Wrapped multi-location sub-groups in `Expanded(flex: 2, child: SingleChildScrollView(...))` instead of spreading them directly into the fixed-height `Column`. Gives bounded height with internal scrolling. Day-level mood/note now only shown in single-location mode; multi-location mode shows per-group mood/note.
+- Updated `makePhoto` test helper to accept optional `mood` and `note` parameters.
+
+### Tests
+
+- Added 7 new unit tests for `LocationGroup` computed getters.
+- Total tests: **112** (up from 105).
+
+---
+
 ## Session 7 — 2026-04-03 (Video Export Bug Fixes & Timeline Location Sub-grouping)
 
 ### Fixed

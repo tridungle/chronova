@@ -32,6 +32,24 @@ class LocationGroup {
     if (photos.isEmpty) return null;
     return photos.firstWhere((p) => p.hasLocation, orElse: () => photos.first);
   }
+
+  /// The mood for this location group — returns the first non-null mood
+  /// found among the photos, or null if none have a mood.
+  String? get mood {
+    for (final photo in photos) {
+      if (photo.mood != null) return photo.mood;
+    }
+    return null;
+  }
+
+  /// The note for this location group — returns the first non-null, non-empty
+  /// note found among the photos, or null if none have a note.
+  String? get note {
+    for (final photo in photos) {
+      if (photo.note != null && photo.note!.isNotEmpty) return photo.note;
+    }
+    return null;
+  }
 }
 
 /// Represents a group of photos for a single day in the timeline.

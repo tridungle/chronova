@@ -125,8 +125,15 @@ class _TimelineItem extends StatelessWidget {
 
 /// Card showing a day's photos, location, and notes.
 ///
-/// When photos span multiple locations, renders location sub-groups
-/// with individual headers and photo sections.
+/// Layout for multi-location days:
+///   - Date + total photo count header
+///   - Full-day photo collage (all photos)
+///   - Location sub-groups, each with: label + mood, thumbnail strip, note
+///
+/// Layout for single-location days:
+///   - Date + mood + photo count + location
+///   - Photo collage (all photos)
+///   - Note preview
 class _DayCard extends StatelessWidget {
   final TimelineDay day;
 
@@ -148,146 +155,53 @@ class _DayCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // If there are multiple locations, show sub-groups
+          // Date + count header — always at top, above the collage
+          _buildDateHeader(
+            colorScheme,
+            showLocation: !day.hasMultipleLocations,
+          ),
+
+          // Full-day photo collage — shows ALL photos
+          if (day.photos.length == 1)
+            _SinglePhoto(photo: primaryPhoto, allPhotos: day.photos)
+          else
+            _PhotoCollage(photos: day.photos),
+
+          // If there are multiple locations, show sub-groups below collage
           if (day.hasMultipleLocations)
             ..._buildLocationSubGroups(context, colorScheme, isDark)
-          else ...[
-            // Single location (or all same location) — original layout
-            if (day.photos.length == 1)
-              _SinglePhoto(photo: primaryPhoto, allPhotos: day.photos)
-            else
-              _PhotoCollage(photos: day.photos),
-            _buildInfoSection(colorScheme, isDark, showLocation: true),
-          ],
+          else if (day.note != null && day.note!.isNotEmpty)
+            // Single location — just the note preview below collage
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              child: Text(
+                day.note!,
+                style: AppTextStyles.body2.copyWith(
+                  color: isDark ? Colors.grey[300] : Colors.grey[700],
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  /// Build a list of location sub-group widgets (header + photos) for
-  /// days that span multiple locations.
-  List<Widget> _buildLocationSubGroups(
-    BuildContext context,
-    ColorScheme colorScheme,
-    bool isDark,
-  ) {
-    final widgets = <Widget>[];
-
-    // Day-level header (date + mood + total count)
-    widgets.add(_buildInfoSection(colorScheme, isDark, showLocation: false));
-
-    for (int i = 0; i < day.locationGroups.length; i++) {
-      final group = day.locationGroups[i];
-      if (group.photos.isEmpty) continue;
-
-      // Location sub-header with pin icon
-      widgets.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
-          child: Row(
-            children: [
-              Icon(
-                group.isUnknown
-                    ? Icons.location_off_rounded
-                    : Icons.location_on_rounded,
-                size: 15,
-                color: group.isUnknown ? Colors.grey[400] : colorScheme.primary,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  group.label,
-                  style: AppTextStyles.subtitle2.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color:
-                        group.isUnknown
-                            ? Colors.grey[500]
-                            : colorScheme.onSurface,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${group.photos.length}',
-                  style: AppTextStyles.label.copyWith(
-                    color: colorScheme.primary,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-
-      // Photos for this location group
-      if (group.photos.length == 1) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: _SinglePhoto(
-                photo: group.photos.first,
-                allPhotos: day.photos,
-              ),
-            ),
-          ),
-        );
-      } else {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: _PhotoCollage(photos: group.photos),
-            ),
-          ),
-        );
-      }
-
-      // Subtle divider between location groups (not after the last one)
-      if (i < day.locationGroups.length - 1) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Divider(
-              height: 16,
-              thickness: 0.5,
-              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-            ),
-          ),
-        );
-      }
-    }
-
-    // Bottom padding
-    widgets.add(const SizedBox(height: 8));
-    return widgets;
-  }
-
-  /// Info section showing date, mood, photo count, location (optional), note.
-  Widget _buildInfoSection(
-    ColorScheme colorScheme,
-    bool isDark, {
+  /// Date header with mood, formatted date, photo count badge, and optional
+  /// location row. Placed at the top of the card, above the photo collage.
+  Widget _buildDateHeader(
+    ColorScheme colorScheme, {
     required bool showLocation,
   }) {
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Date row
           Row(
             children: [
-              if (day.mood != null) ...[
+              if (!day.hasMultipleLocations && day.mood != null) ...[
                 Text(day.mood!, style: const TextStyle(fontSize: 18)),
                 const SizedBox(width: 8),
               ],
@@ -315,7 +229,7 @@ class _DayCard extends StatelessWidget {
             ],
           ),
 
-          // Location (only in single-location mode)
+          // Location (only for single-location days)
           if (showLocation && day.locationName != null) ...[
             const SizedBox(height: 6),
             Row(
@@ -337,39 +251,162 @@ class _DayCard extends StatelessWidget {
               ],
             ),
           ],
-
-          // Multi-location summary badge
-          if (!showLocation && day.hasMultipleLocations) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Icon(Icons.explore_rounded, size: 14, color: Colors.grey[500]),
-                const SizedBox(width: 4),
-                Text(
-                  '${day.locationGroups.length} locations',
-                  style: AppTextStyles.caption.copyWith(
-                    color: colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ],
-
-          // Note preview
-          if (day.note != null && day.note!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              day.note!,
-              style: AppTextStyles.body2.copyWith(
-                color: isDark ? Colors.grey[300] : Colors.grey[700],
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
         ],
       ),
     );
+  }
+
+  /// Build location sub-group widgets (header + thumbnails + note) for
+  /// days that span multiple locations. Does NOT include the date header
+  /// (that is rendered separately above the collage).
+  List<Widget> _buildLocationSubGroups(
+    BuildContext context,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    final widgets = <Widget>[];
+
+    for (int i = 0; i < day.locationGroups.length; i++) {
+      final group = day.locationGroups[i];
+      if (group.photos.isEmpty) continue;
+
+      // Divider between groups (not before the first)
+      if (i > 0) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Divider(
+              height: 16,
+              thickness: 0.5,
+              color: colorScheme.outlineVariant.withValues(alpha: 0.4),
+            ),
+          ),
+        );
+      }
+
+      // Location label + mood emoji + photo count
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
+          child: Row(
+            children: [
+              Icon(
+                group.isUnknown
+                    ? Icons.location_off_rounded
+                    : Icons.location_on_rounded,
+                size: 15,
+                color: group.isUnknown ? Colors.grey[400] : colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  group.label,
+                  style: AppTextStyles.subtitle2.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color:
+                        group.isUnknown
+                            ? Colors.grey[500]
+                            : colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (group.mood != null) ...[
+                Text(group.mood!, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+              ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${group.photos.length}',
+                  style: AppTextStyles.label.copyWith(
+                    color: colorScheme.primary,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Horizontal thumbnail strip for this location group
+      widgets.add(
+        SizedBox(
+          height: 64,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            itemCount: group.photos.length.clamp(0, 10),
+            itemBuilder: (ctx, j) {
+              final photo = group.photos[j];
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => PhotoDetailScreen(
+                            photos: List.from(day.photos),
+                            initialIndex: day.photos
+                                .indexOf(photo)
+                                .clamp(0, day.photos.length - 1),
+                          ),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Hero(
+                    tag: 'photo_${photo.id}',
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 52,
+                        height: 52,
+                        child: Image.file(
+                          File(photo.filePath),
+                          fit: BoxFit.cover,
+                          errorBuilder:
+                              (_, __, ___) =>
+                                  Container(color: Colors.grey[300]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      // Note preview for this location group
+      if (group.note != null && group.note!.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 4),
+            child: Text(
+              group.note!,
+              style: AppTextStyles.body2.copyWith(
+                color: isDark ? Colors.grey[300] : Colors.grey[700],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+      }
+    }
+
+    // Bottom padding
+    widgets.add(const SizedBox(height: 10));
+    return widgets;
   }
 }
 
