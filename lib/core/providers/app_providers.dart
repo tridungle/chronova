@@ -104,7 +104,7 @@ final timelineDaysProvider = FutureProvider<List<TimelineDay>>((ref) async {
 
     days.add(
       TimelineDay(
-        date: DateTime.parse(dateKey),
+        date: DateTime.tryParse(dateKey) ?? DateTime.now(),
         locationName: locPhoto.locationName,
         note: photos.first.note,
         mood: photos.first.mood,
@@ -141,7 +141,7 @@ final tripTimelineDaysProvider =
 
         days.add(
           TimelineDay(
-            date: DateTime.parse(entry.key),
+            date: DateTime.tryParse(entry.key) ?? DateTime.now(),
             locationName: locPhoto.locationName,
             note: datePhotos.first.note,
             mood: datePhotos.first.mood,
@@ -190,3 +190,12 @@ final isImportingProvider = StateProvider<bool>((ref) => false);
 
 /// Bottom nav index
 final bottomNavIndexProvider = StateProvider<int>((ref) => 0);
+
+/// Photo count for a specific trip
+final tripPhotoCountProvider = FutureProvider.family<int, String>((
+  ref,
+  tripId,
+) async {
+  final repo = ref.watch(tripRepositoryProvider);
+  return repo.getPhotoCount(tripId);
+});

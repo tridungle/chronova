@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -5,14 +7,31 @@ import 'package:sqflite/sqflite.dart';
 import '../../core/constants/app_constants.dart';
 
 /// SQLite database helper — singleton for the entire app lifecycle.
+///
+/// Uses a [Completer] to prevent race conditions when multiple callers
+/// request the database before initialization finishes.
 class AppDatabase {
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
 
   Database? _database;
+  Completer<Database>? _completer;
 
   Future<Database> get database async {
-    _database ??= await _initDatabase();
+    if (_database != null) return _database!;
+
+    // If initialization is already in progress, wait for it
+    if (_completer != null) return _completer!.future;
+
+    _completer = Completer<Database>();
+    try {
+      _database = await _initDatabase();
+      _completer!.complete(_database!);
+    } catch (e) {
+      _completer!.completeError(e);
+      _completer = null;
+      rethrow;
+    }
     return _database!;
   }
 
@@ -110,6 +129,7 @@ class AppDatabase {
     if (db != null) {
       await db.close();
       _database = null;
+      _completer = null;
     }
   }
 }

@@ -115,6 +115,7 @@ class ExifService {
     try {
       final ratio = alt.values as IfdRatios;
       final r = ratio.ratios.first;
+      if (r.denominator == 0) return null;
       return r.numerator / r.denominator;
     } catch (_) {
       return null;
@@ -153,6 +154,13 @@ class ExifService {
       final ratios = tag.values as IfdRatios;
       final values = ratios.ratios;
       if (values.length < 3) return null;
+
+      // Guard against division by zero in any component
+      if (values[0].denominator == 0 ||
+          values[1].denominator == 0 ||
+          values[2].denominator == 0) {
+        return null;
+      }
 
       final degrees = values[0].numerator / values[0].denominator;
       final minutes = values[1].numerator / values[1].denominator;

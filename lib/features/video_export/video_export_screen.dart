@@ -3,8 +3,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
@@ -16,6 +18,7 @@ import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/error_retry_widget.dart';
 import '../../data/models/models.dart';
 
 /// Cinematic video export screen — TravelBoast/Polarsteps style.
@@ -49,6 +52,9 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
   final double _polylineThickness = 4.0;
   bool _showPhotoPopups = true;
   bool _showLocationLabels = true;
+  int _framesPerSegment = 10; // 5=fast/small, 10=default, 20=smooth/large
+  double _zoomLevel = 12.0; // map zoom during fly-along
+  bool _useEasing = true; // ease in/out between waypoints
 
   // Map state
   final MapController _mapController = MapController();
@@ -72,7 +78,10 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
 
   @override
   void dispose() {
+    _flyController.removeListener(_onAnimationTick);
+    _flyController.removeStatusListener(_onAnimationStatus);
     _flyController.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -83,7 +92,14 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
     final progress = _flyController.value;
     final segmentProgress = progress * totalSegments;
     final segmentIndex = segmentProgress.floor().clamp(0, totalSegments - 1);
-    final localProgress = segmentProgress - segmentIndex;
+    var localProgress = segmentProgress - segmentIndex;
+
+    // Apply easing curve within each segment for smoother transitions
+    if (_useEasing) {
+      localProgress = Curves.easeInOutCubic.transform(
+        localProgress.clamp(0.0, 1.0),
+      );
+    }
 
     // Interpolate position between waypoints
     final from = _routePoints[segmentIndex];
@@ -94,10 +110,11 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
     final currentLng =
         from.longitude + (to.longitude - from.longitude) * localProgress;
 
-    _mapController.move(LatLng(currentLat, currentLng), 12);
+    _mapController.move(LatLng(currentLat, currentLng), _zoomLevel);
 
     // Show popup when arriving at a new waypoint
     if (segmentIndex != _currentSegment) {
+      if (!mounted) return;
       setState(() {
         _currentSegment = segmentIndex;
         if (_showPhotoPopups && segmentIndex < _geoPhotos.length) {
@@ -109,6 +126,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
 
   void _onAnimationStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) {
+      if (!mounted) return;
       setState(() {
         _isPreviewPlaying = false;
         _currentPopupPhoto = null;
@@ -129,7 +147,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       _currentPopupPhoto = null;
     });
 
-    _mapController.move(_routePoints.first, 12);
+    _mapController.move(_routePoints.first, _zoomLevel);
     _flyController.forward();
   }
 
@@ -187,21 +205,24 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
     });
 
     try {
-      // Number of frames to capture (≈ 10 frames per segment keeps file size
-      // reasonable while still looking smooth).
-      final framesPerSegment = 10;
+      // Number of frames to capture — configurable for smoothness vs file size
       final totalSegments = _routePoints.length - 1;
-      final totalFrames = totalSegments * framesPerSegment;
+      final totalFrames = totalSegments * _framesPerSegment;
 
       // Frame duration in centiseconds (100cs = 1 second)
-      final durationCs = ((_animationSpeed / framesPerSegment) * 100).round();
+      final durationCs = ((_animationSpeed / _framesPerSegment) * 100).round();
       final gifEncoder = img.GifEncoder(delay: durationCs);
 
       for (int i = 0; i <= totalFrames; i++) {
         final t = i / totalFrames; // 0 → 1
         final segF = t * totalSegments;
         final seg = segF.floor().clamp(0, totalSegments - 1);
-        final local = segF - seg;
+        var local = segF - seg;
+
+        // Apply easing for smoother camera motion per segment
+        if (_useEasing) {
+          local = Curves.easeInOutCubic.transform(local.clamp(0.0, 1.0));
+        }
 
         final from = _routePoints[seg];
         final to = _routePoints[(seg + 1).clamp(0, _routePoints.length - 1)];
@@ -209,12 +230,13 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
         final lng = from.longitude + (to.longitude - from.longitude) * local;
 
         // Move the map
-        _mapController.move(LatLng(lat, lng), 12);
+        _mapController.move(LatLng(lat, lng), _zoomLevel);
 
         // Update popup
         if (_showPhotoPopups &&
             seg < _geoPhotos.length &&
             seg != _currentSegment) {
+          if (!mounted) return;
           setState(() {
             _currentSegment = seg;
             _currentPopupPhoto = _geoPhotos[seg];
@@ -247,6 +269,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       if (gifBytes == null) throw Exception('GIF encoding returned no data');
       await File(outputPath).writeAsBytes(gifBytes);
 
+      if (!mounted) return;
       setState(() {
         _isExporting = false;
         _exportProgress = 1.0;
@@ -258,6 +281,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
         context.showSnackBar('Journey exported as animated GIF!');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isExporting = false;
         _exportProgress = 0.0;
@@ -298,9 +322,14 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       ),
       body: geoPhotos.when(
         data: (photos) {
-          _geoPhotos = photos.where((p) => p.hasLocation).toList();
-          _routePoints =
-              _geoPhotos.map((p) => LatLng(p.latitude!, p.longitude!)).toList();
+          // Update data only when not animating/exporting to prevent stale references
+          if (!_isPreviewPlaying && !_isExporting) {
+            _geoPhotos = photos.where((p) => p.hasLocation).toList();
+            _routePoints =
+                _geoPhotos
+                    .map((p) => LatLng(p.latitude!, p.longitude!))
+                    .toList();
+          }
 
           if (_geoPhotos.isEmpty) {
             return Center(
@@ -326,6 +355,15 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
                     style: AppTextStyles.body2.copyWith(
                       color: Colors.grey[500],
                     ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      GoRouter.of(context).push('/import');
+                    },
+                    icon: const Icon(Icons.add_photo_alternate_rounded),
+                    label: const Text('Import Photos'),
                   ),
                 ],
               ),
@@ -579,6 +617,106 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
 
                       // Toggles
                       const SizedBox(height: 16),
+
+                      // Zoom level slider
+                      Row(
+                        children: [
+                          const Icon(Icons.zoom_in_rounded, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Zoom Level', style: AppTextStyles.body2),
+                                Slider(
+                                  value: _zoomLevel,
+                                  min: 6,
+                                  max: 16,
+                                  divisions: 10,
+                                  label: _zoomLevel.toInt().toString(),
+                                  onChanged:
+                                      _isExporting
+                                          ? null
+                                          : (v) =>
+                                              setState(() => _zoomLevel = v),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Frame quality slider
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(Icons.high_quality_rounded, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Smoothness',
+                                      style: AppTextStyles.body2,
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      _framesPerSegment <= 5
+                                          ? 'Fast'
+                                          : _framesPerSegment <= 10
+                                          ? 'Normal'
+                                          : 'Smooth',
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Slider(
+                                  value: _framesPerSegment.toDouble(),
+                                  min: 5,
+                                  max: 20,
+                                  divisions: 3,
+                                  label: '$_framesPerSegment fps',
+                                  onChanged:
+                                      _isExporting
+                                          ? null
+                                          : (v) => setState(
+                                            () => _framesPerSegment = v.toInt(),
+                                          ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // Estimated output info
+                      if (_routePoints.length >= 2)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 8),
+                          child: Text(
+                            'Est. duration: ${((_routePoints.length - 1) * _animationSpeed).toStringAsFixed(0)}s '
+                            '| ${((_routePoints.length - 1) * _framesPerSegment)} frames',
+                            style: AppTextStyles.caption.copyWith(
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ),
+
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Smooth easing'),
+                        subtitle: const Text('Ease in/out between waypoints'),
+                        value: _useEasing,
+                        onChanged:
+                            _isExporting
+                                ? null
+                                : (v) => setState(() => _useEasing = v),
+                      ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Show photo pop-ups'),
@@ -648,7 +786,11 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error:
+            (e, _) => ErrorRetryWidget(
+              message: e.toString(),
+              onRetry: () => ref.invalidate(geoPhotosProvider),
+            ),
       ),
     );
   }

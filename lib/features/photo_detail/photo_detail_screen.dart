@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 
@@ -31,12 +33,14 @@ class PhotoDetailScreen extends ConsumerStatefulWidget {
 class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
   late PageController _pageController;
   late int _currentIndex;
+  late List<Photo> _photos; // Local mutable copy of the photo list
   bool _showOverlay = true;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _photos = List.from(widget.photos);
+    _currentIndex = widget.initialIndex.clamp(0, _photos.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -46,7 +50,7 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
     super.dispose();
   }
 
-  Photo get _currentPhoto => widget.photos[_currentIndex];
+  Photo get _currentPhoto => _photos[_currentIndex];
 
   void _toggleOverlay() {
     setState(() => _showOverlay = !_showOverlay);
@@ -78,6 +82,7 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    HapticFeedback.heavyImpact();
     await ref.read(photoRepositoryProvider).delete(_currentPhoto.id);
 
     // Refresh providers
@@ -89,17 +94,20 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
     if (!mounted) return;
 
     // If this was the only photo, pop the screen
-    if (widget.photos.length <= 1) {
+    if (_photos.length <= 1) {
       Navigator.pop(context, true);
       return;
     }
 
     // Remove photo from local list and adjust index
     setState(() {
-      widget.photos.removeAt(_currentIndex);
-      if (_currentIndex >= widget.photos.length) {
-        _currentIndex = widget.photos.length - 1;
+      _photos.removeAt(_currentIndex);
+      if (_currentIndex >= _photos.length) {
+        _currentIndex = _photos.length - 1;
       }
+      // Recreate page controller to sync with new list length
+      _pageController.dispose();
+      _pageController = PageController(initialPage: _currentIndex);
     });
 
     context.showSnackBar('Photo deleted');
@@ -134,12 +142,13 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
             onTap: _toggleOverlay,
             child: PhotoViewGallery.builder(
               pageController: _pageController,
-              itemCount: widget.photos.length,
+              itemCount: _photos.length,
               onPageChanged: (index) {
+                HapticFeedback.selectionClick();
                 setState(() => _currentIndex = index);
               },
               builder: (context, index) {
-                final photo = widget.photos[index];
+                final photo = _photos[index];
                 return PhotoViewGalleryPageOptions(
                   imageProvider: FileImage(File(photo.filePath)),
                   minScale: PhotoViewComputedScale.contained,
@@ -173,190 +182,65 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
           ),
 
           // Top overlay — back button + actions
-          if (_showOverlay)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.transparent,
-                    ],
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: _showOverlay ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              child: IgnorePointer(
+                ignoring: !_showOverlay,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.7),
+                        Colors.transparent,
+                      ],
+                    ),
                   ),
-                ),
-                child: SafeArea(
-                  bottom: false,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: Colors.white,
-                      ),
-                      const Spacer(),
-                      // Page indicator
-                      if (widget.photos.length > 1)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${_currentIndex + 1} / ${widget.photos.length}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Poppins',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      const Spacer(),
-                      IconButton(
-                        onPressed: _deletePhoto,
-                        icon: const Icon(Icons.delete_outline_rounded),
-                        color: Colors.red[300],
-                        tooltip: 'Delete',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Bottom overlay — photo info + action buttons
-          if (_showOverlay)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.8),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Row(
                       children: [
-                        // Date
-                        if (_currentPhoto.dateTaken != null)
-                          Text(
-                            _currentPhoto.dateTaken!.formattedFull,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontFamily: 'Poppins',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          color: Colors.white,
+                          tooltip: 'Back',
+                        ),
+                        const Spacer(),
+                        // Page indicator
+                        if (_photos.length > 1)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${_currentIndex + 1} / ${_photos.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
-
-                        // Location
-                        if (_currentPhoto.locationName != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.location_on_rounded,
-                                size: 14,
-                                color: Colors.white70,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  _currentPhoto.locationName!,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontFamily: 'Poppins',
-                                    fontSize: 13,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        // Note preview
-                        if (_currentPhoto.note != null &&
-                            _currentPhoto.note!.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              if (_currentPhoto.mood != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 6),
-                                  child: Text(
-                                    _currentPhoto.mood!,
-                                    style: const TextStyle(fontSize: 16),
-                                  ),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  _currentPhoto.note!,
-                                  style: const TextStyle(
-                                    color: Colors.white60,
-                                    fontFamily: 'Poppins',
-                                    fontSize: 13,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-
-                        const SizedBox(height: 12),
-
-                        // Action buttons
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _ActionButton(
-                              icon: Icons.info_outline_rounded,
-                              label: 'Info',
-                              onTap: _showExifInfo,
-                            ),
-                            _ActionButton(
-                              icon: Icons.edit_note_rounded,
-                              label: 'Journal',
-                              onTap: _openJournal,
-                            ),
-                            if (_currentPhoto.hasLocation)
-                              _ActionButton(
-                                icon: Icons.map_rounded,
-                                label: 'Map',
-                                onTap: () {
-                                  Navigator.pop(context);
-                                  // Navigate to map tab (index 1)
-                                  ref
-                                      .read(bottomNavIndexProvider.notifier)
-                                      .state = 1;
-                                },
-                              ),
-                          ],
+                        const Spacer(),
+                        IconButton(
+                          onPressed: _deletePhoto,
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          color: Colors.red[300],
+                          tooltip: 'Delete',
                         ),
                       ],
                     ),
@@ -364,6 +248,144 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
                 ),
               ),
             ),
+          ),
+
+          // Bottom overlay — photo info + action buttons
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              opacity: _showOverlay ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              child: IgnorePointer(
+                ignoring: !_showOverlay,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.8),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Date
+                          if (_currentPhoto.dateTaken != null)
+                            Text(
+                              _currentPhoto.dateTaken!.formattedFull,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Poppins',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+
+                          // Location
+                          if (_currentPhoto.locationName != null) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on_rounded,
+                                  size: 14,
+                                  color: Colors.white70,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    _currentPhoto.locationName!,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontFamily: 'Poppins',
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // Note preview
+                          if (_currentPhoto.note != null &&
+                              _currentPhoto.note!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                if (_currentPhoto.mood != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: Text(
+                                      _currentPhoto.mood!,
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    _currentPhoto.note!,
+                                    style: const TextStyle(
+                                      color: Colors.white60,
+                                      fontFamily: 'Poppins',
+                                      fontSize: 13,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          const SizedBox(height: 12),
+
+                          // Action buttons
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _ActionButton(
+                                icon: Icons.info_outline_rounded,
+                                label: 'Info',
+                                onTap: _showExifInfo,
+                              ),
+                              _ActionButton(
+                                icon: Icons.edit_note_rounded,
+                                label: 'Journal',
+                                onTap: _openJournal,
+                              ),
+                              if (_currentPhoto.hasLocation)
+                                _ActionButton(
+                                  icon: Icons.map_rounded,
+                                  label: 'Map',
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    // Navigate to map tab via GoRouter
+                                    GoRouter.of(context).go('/map');
+                                  },
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -459,7 +481,7 @@ class _ExifInfoSheet extends StatelessWidget {
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.6,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.6,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

@@ -161,6 +161,22 @@ class PhotoRepository {
     await batch.commit(noResult: true);
   }
 
+  /// Update sort order for a list of photos (used for drag-to-reorder)
+  Future<void> updateSortOrders(Map<String, int> idToOrder) async {
+    final db = await _database;
+    final batch = db.batch();
+    final now = DateTime.now().toIso8601String();
+    for (final entry in idToOrder.entries) {
+      batch.update(
+        'photos',
+        {'sort_order': entry.value, 'updated_at': now},
+        where: 'id = ?',
+        whereArgs: [entry.key],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
   /// Remove photos from a trip
   Future<void> removeFromTrip(List<String> photoIds) async {
     final db = await _database;

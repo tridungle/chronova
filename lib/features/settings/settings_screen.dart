@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -67,7 +69,7 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'v1.0.0',
+                  'v${AppConstants.appVersion}',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
@@ -97,21 +99,30 @@ class SettingsScreen extends ConsumerWidget {
                   icon: Icons.brightness_auto_rounded,
                   title: 'System',
                   isSelected: themeMode == 0,
-                  onTap: () => ref.read(themeModeProvider.notifier).state = 0,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    ref.read(themeModeProvider.notifier).state = 0;
+                  },
                 ),
                 const Divider(height: 1, indent: 56),
                 _SettingsTile(
                   icon: Icons.light_mode_rounded,
                   title: 'Light',
                   isSelected: themeMode == 1,
-                  onTap: () => ref.read(themeModeProvider.notifier).state = 1,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    ref.read(themeModeProvider.notifier).state = 1;
+                  },
                 ),
                 const Divider(height: 1, indent: 56),
                 _SettingsTile(
                   icon: Icons.dark_mode_rounded,
                   title: 'Dark',
                   isSelected: themeMode == 2,
-                  onTap: () => ref.read(themeModeProvider.notifier).state = 2,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    ref.read(themeModeProvider.notifier).state = 2;
+                  },
                 ),
               ],
             ),
@@ -187,14 +198,40 @@ class SettingsScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.info_outline_rounded),
                   title: const Text('Version'),
-                  trailing: const Text('1.0.0'),
+                  trailing: const Text(AppConstants.appVersion),
                 ),
                 const Divider(height: 1, indent: 56),
                 ListTile(
                   leading: const Icon(Icons.code_rounded),
                   title: const Text('Built with Flutter'),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () {},
+                  onTap: () {
+                    showAboutDialog(
+                      context: context,
+                      applicationName: AppConstants.appName,
+                      applicationVersion: AppConstants.appVersion,
+                      applicationIcon: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.timeline_rounded,
+                          color: colorScheme.primary,
+                          size: 28,
+                        ),
+                      ),
+                      children: [
+                        const Text(
+                          'A personal photo timeline and journey app that reads '
+                          'EXIF data from your photos, creates a beautiful '
+                          'timeline with journal notes, and maps your travels.',
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

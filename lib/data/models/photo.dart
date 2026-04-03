@@ -1,3 +1,6 @@
+/// Sentinel value used by copyWith to distinguish "not provided" from "null".
+const _absent = Object();
+
 /// Data model representing a Photo with EXIF metadata.
 class Photo {
   final String id;
@@ -52,23 +55,25 @@ class Photo {
   List<String> get tagList =>
       tags?.split(',').where((t) => t.trim().isNotEmpty).toList() ?? [];
 
+  /// Copy with support for explicitly setting nullable fields to null.
+  /// Use the sentinel [_absent] to distinguish "not provided" from "set to null".
   Photo copyWith({
     String? id,
     String? filePath,
-    String? thumbnailPath,
-    String? tripId,
-    DateTime? dateTaken,
-    double? latitude,
-    double? longitude,
-    double? altitude,
-    String? locationName,
-    String? cameraModel,
+    Object? thumbnailPath = _absent,
+    Object? tripId = _absent,
+    Object? dateTaken = _absent,
+    Object? latitude = _absent,
+    Object? longitude = _absent,
+    Object? altitude = _absent,
+    Object? locationName = _absent,
+    Object? cameraModel = _absent,
     int? width,
     int? height,
     int? fileSize,
-    String? note,
-    String? mood,
-    String? tags,
+    Object? note = _absent,
+    Object? mood = _absent,
+    Object? tags = _absent,
     int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -76,20 +81,35 @@ class Photo {
     return Photo(
       id: id ?? this.id,
       filePath: filePath ?? this.filePath,
-      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
-      tripId: tripId ?? this.tripId,
-      dateTaken: dateTaken ?? this.dateTaken,
-      latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude,
-      altitude: altitude ?? this.altitude,
-      locationName: locationName ?? this.locationName,
-      cameraModel: cameraModel ?? this.cameraModel,
+      thumbnailPath:
+          identical(thumbnailPath, _absent)
+              ? this.thumbnailPath
+              : thumbnailPath as String?,
+      tripId: identical(tripId, _absent) ? this.tripId : tripId as String?,
+      dateTaken:
+          identical(dateTaken, _absent)
+              ? this.dateTaken
+              : dateTaken as DateTime?,
+      latitude:
+          identical(latitude, _absent) ? this.latitude : latitude as double?,
+      longitude:
+          identical(longitude, _absent) ? this.longitude : longitude as double?,
+      altitude:
+          identical(altitude, _absent) ? this.altitude : altitude as double?,
+      locationName:
+          identical(locationName, _absent)
+              ? this.locationName
+              : locationName as String?,
+      cameraModel:
+          identical(cameraModel, _absent)
+              ? this.cameraModel
+              : cameraModel as String?,
       width: width ?? this.width,
       height: height ?? this.height,
       fileSize: fileSize ?? this.fileSize,
-      note: note ?? this.note,
-      mood: mood ?? this.mood,
-      tags: tags ?? this.tags,
+      note: identical(note, _absent) ? this.note : note as String?,
+      mood: identical(mood, _absent) ? this.mood : mood as String?,
+      tags: identical(tags, _absent) ? this.tags : tags as String?,
       sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -128,11 +148,11 @@ class Photo {
       tripId: map['trip_id'] as String?,
       dateTaken:
           map['date_taken'] != null
-              ? DateTime.parse(map['date_taken'] as String)
+              ? DateTime.tryParse(map['date_taken'] as String)
               : null,
-      latitude: map['latitude'] as double?,
-      longitude: map['longitude'] as double?,
-      altitude: map['altitude'] as double?,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      altitude: (map['altitude'] as num?)?.toDouble(),
       locationName: map['location_name'] as String?,
       cameraModel: map['camera_model'] as String?,
       width: map['width'] as int?,
@@ -142,8 +162,12 @@ class Photo {
       mood: map['mood'] as String?,
       tags: map['tags'] as String?,
       sortOrder: (map['sort_order'] as int?) ?? 0,
-      createdAt: DateTime.parse(map['created_at'] as String),
-      updatedAt: DateTime.parse(map['updated_at'] as String),
+      createdAt:
+          DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(map['updated_at'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 

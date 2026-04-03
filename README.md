@@ -7,6 +7,7 @@ A personal photo timeline and journey app built with Flutter. Chronova automatic
 ## Features
 
 ### Photo Import & EXIF Processing
+
 - Select multiple photos from the device gallery
 - Automatically extract `DateTimeOriginal` and GPS coordinates (latitude, longitude, altitude) from EXIF metadata
 - Reverse geocode GPS coordinates to human-readable location names (city, country)
@@ -14,6 +15,7 @@ A personal photo timeline and journey app built with Flutter. Chronova automatic
 - Extract camera model, image dimensions, and file size
 
 ### Timeline View
+
 - **Vertical Timeline** — Rail-style connector with dots, photo collages (1 to 4+ grid layout), date, location, mood, and journal notes
 - **Horizontal Timeline** — Swipeable PageView cards with a date strip selector, photo thumbnails, and location badges
 - Toggle between views with a single tap
@@ -21,6 +23,7 @@ A personal photo timeline and journey app built with Flutter. Chronova automatic
 - Group photos by date or by user-created Trips
 
 ### Map View
+
 - Display all photo locations as circular thumbnail markers on the map
 - Draw a polyline connecting points in chronological order
 - Customizable polyline color (6 options) and thickness via slider
@@ -29,6 +32,7 @@ A personal photo timeline and journey app built with Flutter. Chronova automatic
 - Automatic dark/light map tiles matching app theme (Carto Voyager / Carto Dark)
 
 ### Cinematic Video Export
+
 - Fly-along animation that smoothly moves the camera from one marker to the next
 - Photo popups appear at each waypoint during the animation
 - Adjustable animation speed (1-8 seconds per segment)
@@ -38,17 +42,20 @@ A personal photo timeline and journey app built with Flutter. Chronova automatic
 - Export and share via the system share sheet
 
 ### Trip Management
+
 - Create named trips to group photos by destination or journey
 - View trip-specific timeline with dedicated photo count
 - Trip list with cover photo, date range, and description
 
 ### Journal & Notes
+
 - Add journal notes to any photo or day via a bottom sheet editor
 - Mood selector with 15 emoji options
 - Tag system with 15 built-in categories (Travel, Food, Nature, City, etc.)
 - Notes saved to both the photo record and a dedicated journal entries table
 
 ### Settings
+
 - Light, Dark, and System theme modes
 - Material 3 design with Poppins typography
 - Photo and trip statistics dashboard
@@ -72,7 +79,7 @@ A personal photo timeline and journey app built with Flutter. Chronova automatic
 
 ## Project Structure
 
-```
+```text
 lib/
   main.dart                              # App entry point with ProviderScope
   core/
@@ -147,11 +154,15 @@ cd ios && pod install && cd ..
 
 # Run the app
 flutter run
+
+# OR Run with simulator ID
+flutter run -d 90DA1D5E-39C9-4773-BE8A-DCE7242B4E3B 2>&1
 ```
 
 ### Android Permissions
 
 The following permissions are configured in `AndroidManifest.xml`:
+
 - `READ_MEDIA_IMAGES` / `READ_EXTERNAL_STORAGE` — photo access
 - `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` — GPS & geocoding
 - `INTERNET` — map tiles and geocoding API
@@ -159,6 +170,7 @@ The following permissions are configured in `AndroidManifest.xml`:
 ### iOS Permissions
 
 The following usage descriptions are configured in `Info.plist`:
+
 - `NSPhotoLibraryUsageDescription` — photo library access
 - `NSPhotoLibraryAddUsageDescription` — save exported videos
 - `NSLocationWhenInUseUsageDescription` — location tagging

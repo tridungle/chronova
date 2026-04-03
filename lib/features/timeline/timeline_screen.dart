@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/widgets/error_retry_widget.dart';
+import '../../core/widgets/shimmer_loading.dart';
 import 'widgets/vertical_timeline.dart';
 import 'widgets/horizontal_timeline.dart';
 
@@ -17,7 +20,6 @@ class TimelineScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isVertical = ref.watch(timelineVerticalProvider);
     final timelineDays = ref.watch(timelineDaysProvider);
-    final colorScheme = context.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -32,6 +34,7 @@ class TimelineScreen extends ConsumerWidget {
           // Toggle between vertical and horizontal
           IconButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               ref.read(timelineVerticalProvider.notifier).state = !isVertical;
             },
             icon: AnimatedSwitcher(
@@ -58,38 +61,37 @@ class TimelineScreen extends ConsumerWidget {
             return _EmptyTimeline(onImport: () => context.push('/import'));
           }
 
-          return AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child:
-                isVertical
-                    ? VerticalTimeline(
-                      key: const ValueKey('vertical'),
-                      days: days,
-                    )
-                    : HorizontalTimeline(
-                      key: const ValueKey('horizontal'),
-                      days: days,
-                    ),
+          final timelineChild =
+              isVertical
+                  ? VerticalTimeline(
+                    key: const ValueKey('vertical'),
+                    days: days,
+                  )
+                  : HorizontalTimeline(
+                    key: const ValueKey('horizontal'),
+                    days: days,
+                  );
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              HapticFeedback.mediumImpact();
+              ref.invalidate(timelineDaysProvider);
+              // Wait for the provider to settle
+              await ref.read(timelineDaysProvider.future);
+            },
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: timelineChild,
+            ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => SkeletonLoaders.timeline(context),
         error:
-            (error, stack) => Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: colorScheme.error),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load timeline',
-                    style: AppTextStyles.subtitle1,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(error.toString(), style: AppTextStyles.caption),
-                ],
-              ),
+            (error, stack) => ErrorRetryWidget(
+              message: error.toString(),
+              onRetry: () => ref.invalidate(timelineDaysProvider),
             ),
       ),
     );

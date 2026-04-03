@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -10,7 +12,9 @@ import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/error_retry_widget.dart';
 import '../../data/models/models.dart';
+import '../photo_detail/photo_detail_screen.dart';
 
 /// Map view showing all photo locations with polyline connections.
 class MapScreen extends ConsumerStatefulWidget {
@@ -26,6 +30,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   int _selectedPolylineColor = 0;
   double _polylineThickness = 3.0;
   Photo? _selectedPhoto;
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +105,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   .map((p) => LatLng(p.latitude!, p.longitude!))
                   .toList();
 
+          if (points.isEmpty) {
+            return _EmptyMapState();
+          }
+
           // Calculate bounds
           final bounds = LatLngBounds.fromPoints(points);
 
@@ -147,6 +161,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             height: 40,
                             child: GestureDetector(
                               onTap: () {
+                                HapticFeedback.selectionClick();
                                 setState(() => _selectedPhoto = photo);
                               },
                               child: Container(
@@ -192,17 +207,33 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ],
               ),
 
-              // Selected photo popup
-              if (_selectedPhoto != null)
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  right: 16,
-                  child: _PhotoPopup(
-                    photo: _selectedPhoto!,
-                    onClose: () => setState(() => _selectedPhoto = null),
+              // Selected photo popup with slide-up animation
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: AnimatedSlide(
+                  offset:
+                      _selectedPhoto != null ? Offset.zero : const Offset(0, 2),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: _selectedPhoto != null ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    child: IgnorePointer(
+                      ignoring: _selectedPhoto == null,
+                      child:
+                          _selectedPhoto != null
+                              ? _PhotoPopup(
+                                photo: _selectedPhoto!,
+                                onClose:
+                                    () => setState(() => _selectedPhoto = null),
+                              )
+                              : const SizedBox.shrink(),
+                    ),
                   ),
                 ),
+              ),
 
               // Thickness slider (bottom-left)
               Positioned(
@@ -269,7 +300,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error loading map data: $e')),
+        error:
+            (e, _) => ErrorRetryWidget(
+              message: e.toString(),
+              onRetry: () => ref.invalidate(geoPhotosProvider),
+            ),
       ),
     );
   }
@@ -303,6 +338,15 @@ class _EmptyMapState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppTextStyles.body2.copyWith(color: Colors.grey[500]),
           ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              GoRouter.of(context).push('/import');
+            },
+            icon: const Icon(Icons.add_photo_alternate_rounded),
+            label: const Text('Import Photos'),
+          ),
         ],
       ),
     );
@@ -316,6 +360,16 @@ class _PhotoPopup extends StatelessWidget {
 
   const _PhotoPopup({required this.photo, required this.onClose});
 
+  void _openPhotoDetail(BuildContext context) {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PhotoDetailScreen(photos: [photo], initialIndex: 0),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -324,20 +378,31 @@ class _PhotoPopup extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Photo
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: SizedBox(
-              height: 120,
-              width: double.infinity,
-              child: Image.file(
-                File(photo.filePath),
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (_, __, ___) => Container(
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.broken_image_rounded, size: 40),
-                    ),
+          // Photo — tappable to open detail
+          GestureDetector(
+            onTap: () => _openPhotoDetail(context),
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: SizedBox(
+                height: 120,
+                width: double.infinity,
+                child: Hero(
+                  tag: 'photo_${photo.id}',
+                  child: Image.file(
+                    File(photo.filePath),
+                    fit: BoxFit.cover,
+                    errorBuilder:
+                        (_, __, ___) => Container(
+                          color: Colors.grey[300],
+                          child: const Icon(
+                            Icons.broken_image_rounded,
+                            size: 40,
+                          ),
+                        ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -388,9 +453,23 @@ class _PhotoPopup extends StatelessWidget {
                     ],
                   ),
                 ),
+                // View button
+                IconButton(
+                  onPressed: () => _openPhotoDetail(context),
+                  icon: const Icon(Icons.open_in_full_rounded),
+                  tooltip: 'View photo',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.1),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Close button
                 IconButton(
                   onPressed: onClose,
                   icon: const Icon(Icons.close_rounded),
+                  tooltip: 'Close',
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.grey.withValues(alpha: 0.1),
                   ),

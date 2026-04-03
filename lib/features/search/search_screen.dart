@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,12 +22,14 @@ class SearchScreen extends ConsumerStatefulWidget {
 
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _searchController = TextEditingController();
+  Timer? _debounceTimer;
   List<Photo> _results = [];
   bool _isSearching = false;
   bool _hasSearched = false;
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -90,11 +94,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         : null,
               ),
               onChanged: (value) {
-                // Debounce search
-                Future.delayed(const Duration(milliseconds: 300), () {
-                  if (_searchController.text == value) {
-                    _performSearch(value);
-                  }
+                // Cancel previous debounce timer and start a new one
+                _debounceTimer?.cancel();
+                _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+                  if (mounted) _performSearch(value);
                 });
                 setState(() {}); // Update suffix icon
               },
@@ -177,6 +180,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               final photo = _results[index];
               return GestureDetector(
                     onTap: () {
+                      HapticFeedback.lightImpact();
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -243,12 +247,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   )
                   .animate()
                   .fadeIn(
-                    delay: Duration(milliseconds: 30 * index),
+                    delay: Duration(milliseconds: (30 * index).clamp(0, 300)),
                     duration: 300.ms,
                   )
                   .scale(
                     begin: const Offset(0.9, 0.9),
-                    delay: Duration(milliseconds: 30 * index),
+                    delay: Duration(milliseconds: (30 * index).clamp(0, 300)),
                     duration: 300.ms,
                   );
             },

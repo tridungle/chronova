@@ -4,6 +4,7 @@ class AppConstants {
 
   static const String appName = 'Chronova';
   static const String appTagline = 'Your Life, Beautifully Mapped';
+  static const String appVersion = '1.0.0';
   static const String dbName = 'chronova.db';
   static const int dbVersion = 1;
 

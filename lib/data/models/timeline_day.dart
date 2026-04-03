@@ -1,5 +1,8 @@
 import 'photo.dart';
 
+/// Sentinel value used by copyWith to distinguish "not provided" from "null".
+const _absent = Object();
+
 /// Represents a group of photos for a single day in the timeline.
 class TimelineDay {
   final DateTime date;
@@ -16,9 +19,12 @@ class TimelineDay {
     required this.photos,
   });
 
-  /// The primary photo for this day (first photo with location, or just first)
-  Photo get primaryPhoto =>
-      photos.firstWhere((p) => p.hasLocation, orElse: () => photos.first);
+  /// The primary photo for this day (first photo with location, or just first).
+  /// Returns null only if [photos] is empty (should not happen in practice).
+  Photo? get primaryPhoto {
+    if (photos.isEmpty) return null;
+    return photos.firstWhere((p) => p.hasLocation, orElse: () => photos.first);
+  }
 
   /// Number of photos with GPS coordinates
   int get photosWithLocation => photos.where((p) => p.hasLocation).length;
@@ -61,23 +67,23 @@ class JournalEntry {
 
   JournalEntry copyWith({
     String? id,
-    String? tripId,
-    String? photoId,
+    Object? tripId = _absent,
+    Object? photoId = _absent,
     DateTime? date,
     String? content,
-    String? mood,
-    String? tags,
+    Object? mood = _absent,
+    Object? tags = _absent,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
     return JournalEntry(
       id: id ?? this.id,
-      tripId: tripId ?? this.tripId,
-      photoId: photoId ?? this.photoId,
+      tripId: identical(tripId, _absent) ? this.tripId : tripId as String?,
+      photoId: identical(photoId, _absent) ? this.photoId : photoId as String?,
       date: date ?? this.date,
       content: content ?? this.content,
-      mood: mood ?? this.mood,
-      tags: tags ?? this.tags,
+      mood: identical(mood, _absent) ? this.mood : mood as String?,
+      tags: identical(tags, _absent) ? this.tags : tags as String?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -102,12 +108,16 @@ class JournalEntry {
       id: map['id'] as String,
       tripId: map['trip_id'] as String?,
       photoId: map['photo_id'] as String?,
-      date: DateTime.parse(map['date'] as String),
+      date: DateTime.tryParse(map['date'] as String? ?? '') ?? DateTime.now(),
       content: map['content'] as String,
       mood: map['mood'] as String?,
       tags: map['tags'] as String?,
-      createdAt: DateTime.parse(map['created_at'] as String),
-      updatedAt: DateTime.parse(map['updated_at'] as String),
+      createdAt:
+          DateTime.tryParse(map['created_at'] as String? ?? '') ??
+          DateTime.now(),
+      updatedAt:
+          DateTime.tryParse(map['updated_at'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 }

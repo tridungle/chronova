@@ -136,28 +136,39 @@ class _HorizontalTimelineState extends State<HorizontalTimeline> {
           ),
         ),
 
-        // Page indicator dots
+        // Page indicator — compact text for many pages, dots for few
         Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              widget.days.length.clamp(0, 10), // limit dots
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                width: index == _currentPage ? 24 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color:
-                      index == _currentPage
-                          ? colorScheme.primary
-                          : colorScheme.primary.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
+          child:
+              widget.days.length > 10
+                  ? Text(
+                    '${_currentPage + 1} / ${widget.days.length}',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[500],
+                    ),
+                  )
+                  : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      widget.days.length,
+                      (index) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: index == _currentPage ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color:
+                              index == _currentPage
+                                  ? colorScheme.primary
+                                  : colorScheme.primary.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
         ),
       ],
     );
@@ -175,6 +186,11 @@ class _HorizontalDayCard extends StatelessWidget {
     final colorScheme = context.colorScheme;
     final isDark = context.isDark;
     final primaryPhoto = day.primaryPhoto;
+
+    // Guard against empty photo days
+    if (primaryPhoto == null || day.photos.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -206,17 +222,20 @@ class _HorizontalDayCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.file(
-                          File(primaryPhoto.filePath),
-                          fit: BoxFit.cover,
-                          errorBuilder:
-                              (_, __, ___) => Container(
-                                color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.broken_image_rounded,
-                                  size: 48,
+                        Hero(
+                          tag: 'photo_${primaryPhoto.id}',
+                          child: Image.file(
+                            File(primaryPhoto.filePath),
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (_, __, ___) => Container(
+                                  color: Colors.grey[300],
+                                  child: const Icon(
+                                    Icons.broken_image_rounded,
+                                    size: 48,
+                                  ),
                                 ),
-                              ),
+                          ),
                         ),
                         // Gradient overlay at bottom
                         Positioned(
@@ -328,17 +347,24 @@ class _HorizontalDayCard extends StatelessWidget {
                           },
                           child: Padding(
                             padding: const EdgeInsets.only(right: 6),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: SizedBox(
-                                width: 44,
-                                height: 44,
-                                child: Image.file(
-                                  File(day.photos[i].filePath),
-                                  fit: BoxFit.cover,
-                                  errorBuilder:
-                                      (_, __, ___) =>
-                                          Container(color: Colors.grey[300]),
+                            child: Hero(
+                              tag:
+                                  i == 0
+                                      // Avoid duplicate Hero tag with the main photo
+                                      ? 'thumb_${day.photos[i].id}'
+                                      : 'photo_${day.photos[i].id}',
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  width: 44,
+                                  height: 44,
+                                  child: Image.file(
+                                    File(day.photos[i].filePath),
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (_, __, ___) =>
+                                            Container(color: Colors.grey[300]),
+                                  ),
                                 ),
                               ),
                             ),

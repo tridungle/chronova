@@ -39,10 +39,14 @@ extension ContextX on BuildContext {
   ThemeData get theme => Theme.of(this);
   TextTheme get textTheme => Theme.of(this).textTheme;
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
-  MediaQueryData get mq => MediaQuery.of(this);
-  double get screenWidth => mq.size.width;
-  double get screenHeight => mq.size.height;
-  EdgeInsets get padding => mq.padding;
+
+  /// Use specific MediaQuery.xxxOf(context) methods to avoid unnecessary
+  /// rebuilds. These only trigger rebuilds when the specific property changes,
+  /// unlike MediaQuery.of(context) which rebuilds on any MediaQuery change.
+  double get screenWidth => MediaQuery.sizeOf(this).width;
+  double get screenHeight => MediaQuery.sizeOf(this).height;
+  EdgeInsets get padding => MediaQuery.paddingOf(this);
+  EdgeInsets get viewInsets => MediaQuery.viewInsetsOf(this);
   bool get isDark => theme.brightness == Brightness.dark;
 
   void showSnackBar(String message, {bool isError = false}) {

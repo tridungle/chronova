@@ -3,6 +3,7 @@
 ## Session 2 — 2026-04-03
 
 ### Added
+
 - Photo detail/viewer screen with `photo_view` zoom/pan, swipe gallery, EXIF info sheet
 - Photo deletion with confirmation dialog
 - Edit trip (rename, update description) and delete trip with confirmation
@@ -14,10 +15,12 @@
 - `/search` route
 
 ### Fixed
+
 - `video_export_screen.dart` — replaced non-existent `img.Animation()` with correct `GifEncoder.addFrame()` + `finish()` API for `image` package v4.x
 - `video_export_screen.dart` — made `_polylineThickness` final (analyzer warning)
 
 ### Dependencies
+
 - Added `shared_preferences`
 
 ---
@@ -25,6 +28,7 @@
 ## Session 1 — Initial Build
 
 ### Added
+
 - Flutter project setup with Riverpod 2.0, flutter_map, Material 3
 - Feature-first project structure (core/, data/, services/, features/)
 - Data models: Photo, Trip, TimelineDay, JournalEntry with toMap/fromMap/copyWith

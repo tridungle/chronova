@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,7 +78,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           PageView.builder(
             controller: _pageController,
             itemCount: _pages.length,
-            onPageChanged: (index) => setState(() => _currentPage = index),
+            onPageChanged: (index) {
+              HapticFeedback.selectionClick();
+              setState(() => _currentPage = index);
+            },
             itemBuilder: (context, index) {
               final page = _pages[index];
               return _OnboardingPageWidget(page: page, index: index);
@@ -136,8 +140,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ElevatedButton(
                       onPressed: () {
                         if (isLastPage) {
+                          HapticFeedback.mediumImpact();
                           _completeOnboarding();
                         } else {
+                          HapticFeedback.lightImpact();
                           _pageController.nextPage(
                             duration: const Duration(milliseconds: 400),
                             curve: Curves.easeOutCubic,

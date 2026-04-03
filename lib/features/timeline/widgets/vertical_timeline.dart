@@ -110,10 +110,13 @@ class _TimelineItem extends StatelessWidget {
           ),
         )
         .animate()
-        .fadeIn(delay: Duration(milliseconds: 80 * index), duration: 500.ms)
+        .fadeIn(
+          delay: Duration(milliseconds: (80 * index).clamp(0, 800)),
+          duration: 500.ms,
+        )
         .slideX(
           begin: 0.1,
-          delay: Duration(milliseconds: 80 * index),
+          delay: Duration(milliseconds: (80 * index).clamp(0, 800)),
           duration: 500.ms,
           curve: Curves.easeOutCubic,
         );
@@ -131,6 +134,11 @@ class _DayCard extends StatelessWidget {
     final colorScheme = context.colorScheme;
     final isDark = context.isDark;
     final primaryPhoto = day.primaryPhoto;
+
+    // Guard against empty photo days (should not happen in practice)
+    if (primaryPhoto == null || day.photos.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -382,15 +390,18 @@ class _PhotoCollage extends StatelessWidget {
                 ),
               );
             },
-            child: SizedBox.expand(
-              child: Image.file(
-                File(photo.filePath),
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (_, __, ___) => Container(
-                      color: Colors.grey[300],
-                      child: const Icon(Icons.broken_image_rounded),
-                    ),
+            child: Hero(
+              tag: 'photo_${photo.id}',
+              child: SizedBox.expand(
+                child: Image.file(
+                  File(photo.filePath),
+                  fit: BoxFit.cover,
+                  errorBuilder:
+                      (_, __, ___) => Container(
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.broken_image_rounded),
+                      ),
+                ),
               ),
             ),
           ),

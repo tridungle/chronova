@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -79,6 +80,7 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
       final importService = ref.read(photoImportServiceProvider);
       final result = await importService.pickAndImportPhotos(
         onProgress: (current, total) {
+          if (!mounted) return;
           setState(() {
             _currentProgress = current;
             _totalProgress = total;
@@ -89,7 +91,9 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
 
       // Reverse geocode photos with GPS data
       if (result.withGps > 0) {
-        setState(() => _statusMessage = 'Resolving locations...');
+        if (mounted) {
+          setState(() => _statusMessage = 'Resolving locations...');
+        }
         final locationService = ref.read(locationServiceProvider);
         final photoRepo = ref.read(photoRepositoryProvider);
 
@@ -112,16 +116,19 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
         }
       }
 
-      setState(() {
-        _isImporting = false;
-        _result = result;
-      });
-    } catch (e) {
-      setState(() {
-        _isImporting = false;
-        _statusMessage = 'Error: $e';
-      });
       if (mounted) {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _isImporting = false;
+          _result = result;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+          _statusMessage = 'Error: $e';
+        });
         context.showSnackBar('Import failed: $e', isError: true);
       }
     }

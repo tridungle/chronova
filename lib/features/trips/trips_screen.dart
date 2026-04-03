@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,8 @@ import 'package:uuid/uuid.dart';
 import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/widgets/error_retry_widget.dart';
+import '../../core/widgets/shimmer_loading.dart';
 import '../../data/models/models.dart';
 
 /// Screen listing all trips.
@@ -68,28 +71,39 @@ class TripsScreen extends ConsumerWidget {
             );
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: tripList.length,
-            itemBuilder: (context, index) {
-              final trip = tripList[index];
-              return _TripCard(trip: trip, index: index)
-                  .animate()
-                  .fadeIn(
-                    delay: Duration(milliseconds: 60 * index),
-                    duration: 400.ms,
-                  )
-                  .slideY(
-                    begin: 0.15,
-                    delay: Duration(milliseconds: 60 * index),
-                    duration: 400.ms,
-                    curve: Curves.easeOutCubic,
-                  );
+          return RefreshIndicator(
+            onRefresh: () async {
+              HapticFeedback.mediumImpact();
+              ref.invalidate(tripsProvider);
+              await ref.read(tripsProvider.future);
             },
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: tripList.length,
+              itemBuilder: (context, index) {
+                final trip = tripList[index];
+                return _TripCard(trip: trip, index: index)
+                    .animate()
+                    .fadeIn(
+                      delay: Duration(milliseconds: (60 * index).clamp(0, 600)),
+                      duration: 400.ms,
+                    )
+                    .slideY(
+                      begin: 0.15,
+                      delay: Duration(milliseconds: (60 * index).clamp(0, 600)),
+                      duration: 400.ms,
+                      curve: Curves.easeOutCubic,
+                    );
+              },
+            ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => SkeletonLoaders.tripList(context),
+        error:
+            (e, _) => ErrorRetryWidget(
+              message: e.toString(),
+              onRetry: () => ref.invalidate(tripsProvider),
+            ),
       ),
     );
   }
@@ -137,7 +151,7 @@ class TripsScreen extends ConsumerWidget {
               ),
             ],
           ),
-    );
+    ).then((_) => nameController.dispose());
   }
 }
 
@@ -215,13 +229,13 @@ class _TripCard extends ConsumerWidget {
                             color: Colors.grey[500],
                           ),
                           const SizedBox(width: 4),
-                          FutureBuilder<int>(
-                            future: ref
-                                .read(tripRepositoryProvider)
-                                .getPhotoCount(trip.id),
-                            builder: (context, snap) {
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final count = ref.watch(
+                                tripPhotoCountProvider(trip.id),
+                              );
                               return Text(
-                                '${snap.data ?? 0} photos',
+                                '${count.valueOrNull ?? 0} photos',
                                 style: AppTextStyles.caption,
                               );
                             },

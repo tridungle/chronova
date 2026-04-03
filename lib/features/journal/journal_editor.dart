@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -59,7 +60,7 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -96,6 +97,7 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
                       final isSelected = _selectedMood == mood;
                       return GestureDetector(
                         onTap: () {
+                          HapticFeedback.selectionClick();
                           setState(() {
                             _selectedMood = isSelected ? null : mood;
                           });
@@ -161,6 +163,7 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
                         selected: isSelected,
                         label: Text(tag),
                         onSelected: (selected) {
+                          HapticFeedback.selectionClick();
                           setState(() {
                             if (selected) {
                               _selectedTags.add(tag);
@@ -195,41 +198,66 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
   }
 
   Future<void> _save() async {
-    final note = _noteController.text.trim();
-    final tags = _selectedTags.join(',');
+    try {
+      final note = _noteController.text.trim();
+      final tags = _selectedTags.join(',');
 
-    // Update photo with note, mood, tags
-    if (widget.photo != null) {
-      final updated = widget.photo!.copyWith(
-        note: note.isEmpty ? null : note,
-        mood: _selectedMood,
-        tags: tags.isEmpty ? null : tags,
-        updatedAt: DateTime.now(),
-      );
-      await ref.read(photoRepositoryProvider).update(updated);
+      // Update photo with note, mood, tags
+      if (widget.photo != null) {
+        final updated = widget.photo!.copyWith(
+          note: note.isEmpty ? null : note,
+          mood: _selectedMood,
+          tags: tags.isEmpty ? null : tags,
+          updatedAt: DateTime.now(),
+        );
+        await ref.read(photoRepositoryProvider).update(updated);
+      }
+
+      // Also save as journal entry — upsert based on photo ID
+      if (note.isNotEmpty) {
+        final journalRepo = ref.read(journalRepositoryProvider);
+        JournalEntry? existing;
+        if (widget.photo != null) {
+          existing = await journalRepo.getByPhotoId(widget.photo!.id);
+        }
+
+        if (existing != null) {
+          // Update existing journal entry
+          final updated = existing.copyWith(
+            content: note,
+            mood: _selectedMood,
+            tags: tags.isEmpty ? null : tags,
+            updatedAt: DateTime.now(),
+          );
+          await journalRepo.update(updated);
+        } else {
+          // Create new journal entry
+          final entry = JournalEntry(
+            id: const Uuid().v4(),
+            tripId: widget.tripId,
+            photoId: widget.photo?.id,
+            date: widget.date,
+            content: note,
+            mood: _selectedMood,
+            tags: tags.isEmpty ? null : tags,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
+          await journalRepo.insert(entry);
+        }
+      }
+
+      // Refresh data
+      ref.invalidate(allPhotosProvider);
+      ref.invalidate(timelineDaysProvider);
+      ref.invalidate(journalEntriesProvider);
+
+      HapticFeedback.lightImpact();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        context.showSnackBar('Failed to save: $e', isError: true);
+      }
     }
-
-    // Also save as journal entry
-    if (note.isNotEmpty) {
-      final entry = JournalEntry(
-        id: const Uuid().v4(),
-        tripId: widget.tripId,
-        photoId: widget.photo?.id,
-        date: widget.date,
-        content: note,
-        mood: _selectedMood,
-        tags: tags.isEmpty ? null : tags,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-      await ref.read(journalRepositoryProvider).insert(entry);
-    }
-
-    // Refresh data
-    ref.invalidate(allPhotosProvider);
-    ref.invalidate(timelineDaysProvider);
-    ref.invalidate(journalEntriesProvider);
-
-    if (mounted) Navigator.pop(context);
   }
 }
