@@ -16,6 +16,7 @@ class Photo {
   final int? width;
   final int? height;
   final int? fileSize; // bytes
+  final String? fileHash; // SHA-256 of file content for duplicate detection
   final String? note;
   final String? mood;
   final String? tags; // comma-separated
@@ -37,6 +38,7 @@ class Photo {
     this.width,
     this.height,
     this.fileSize,
+    this.fileHash,
     this.note,
     this.mood,
     this.tags,
@@ -71,6 +73,7 @@ class Photo {
     int? width,
     int? height,
     int? fileSize,
+    Object? fileHash = _absent,
     Object? note = _absent,
     Object? mood = _absent,
     Object? tags = _absent,
@@ -107,6 +110,8 @@ class Photo {
       width: width ?? this.width,
       height: height ?? this.height,
       fileSize: fileSize ?? this.fileSize,
+      fileHash:
+          identical(fileHash, _absent) ? this.fileHash : fileHash as String?,
       note: identical(note, _absent) ? this.note : note as String?,
       mood: identical(mood, _absent) ? this.mood : mood as String?,
       tags: identical(tags, _absent) ? this.tags : tags as String?,
@@ -131,6 +136,7 @@ class Photo {
       'width': width,
       'height': height,
       'file_size': fileSize,
+      'file_hash': fileHash,
       'note': note,
       'mood': mood,
       'tags': tags,
@@ -158,6 +164,7 @@ class Photo {
       width: map['width'] as int?,
       height: map['height'] as int?,
       fileSize: map['file_size'] as int?,
+      fileHash: map['file_hash'] as String?,
       note: map['note'] as String?,
       mood: map['mood'] as String?,
       tags: map['tags'] as String?,

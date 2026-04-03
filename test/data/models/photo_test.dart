@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chronova/data/models/photo.dart';
+import 'package:chronova/services/photo_import_service.dart';
 
 void main() {
   group('Photo', () {
@@ -18,6 +21,7 @@ void main() {
       width: 4032,
       height: 3024,
       fileSize: 5242880,
+      fileHash: 'abc123sha256hash',
       note: 'Beautiful cherry blossoms',
       mood: '🌸',
       tags: 'travel,japan,spring',
@@ -75,6 +79,7 @@ void main() {
         expect(p.width, isNull);
         expect(p.height, isNull);
         expect(p.fileSize, isNull);
+        expect(p.fileHash, isNull);
         expect(p.note, isNull);
         expect(p.mood, isNull);
         expect(p.tags, isNull);
@@ -163,6 +168,7 @@ void main() {
           dateTaken: null,
           thumbnailPath: null,
           cameraModel: null,
+          fileHash: null,
         );
         expect(copy.tripId, isNull);
         expect(copy.locationName, isNull);
@@ -175,6 +181,7 @@ void main() {
         expect(copy.dateTaken, isNull);
         expect(copy.thumbnailPath, isNull);
         expect(copy.cameraModel, isNull);
+        expect(copy.fileHash, isNull);
       });
 
       test('sentinel pattern preserves non-null values when not specified', () {
@@ -202,6 +209,7 @@ void main() {
         expect(map['width'], 4032);
         expect(map['height'], 3024);
         expect(map['file_size'], 5242880);
+        expect(map['file_hash'], 'abc123sha256hash');
         expect(map['note'], 'Beautiful cherry blossoms');
         expect(map['mood'], '🌸');
         expect(map['tags'], 'travel,japan,spring');
@@ -311,6 +319,99 @@ void main() {
         );
         expect(photo.hashCode, equals(other.hashCode));
       });
+    });
+  });
+
+  group('ImportResult', () {
+    test('duplicateCount is included in constructor', () {
+      const result = ImportResult(
+        totalFiles: 10,
+        successCount: 7,
+        failedCount: 1,
+        duplicateCount: 2,
+        withExifDate: 5,
+        withGps: 3,
+        photos: [],
+      );
+      expect(result.totalFiles, 10);
+      expect(result.successCount, 7);
+      expect(result.failedCount, 1);
+      expect(result.duplicateCount, 2);
+      expect(result.withExifDate, 5);
+      expect(result.withGps, 3);
+    });
+
+    test('duplicateCount defaults to 0 in typical zero result', () {
+      const result = ImportResult(
+        totalFiles: 0,
+        successCount: 0,
+        failedCount: 0,
+        duplicateCount: 0,
+        withExifDate: 0,
+        withGps: 0,
+        photos: [],
+      );
+      expect(result.duplicateCount, 0);
+    });
+  });
+
+  group('PhotoImportService.computeFileHash', () {
+    test('computes SHA-256 hash for a file', () async {
+      // Create a temporary file with known content
+      final tempDir = Directory.systemTemp.createTempSync('hash_test');
+      final file = File('${tempDir.path}/test.txt');
+      file.writeAsStringSync('hello world');
+
+      final hash = await PhotoImportService.computeFileHash(file);
+
+      // SHA-256 of "hello world"
+      expect(
+        hash,
+        'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9',
+      );
+
+      // Cleanup
+      tempDir.deleteSync(recursive: true);
+    });
+
+    test('same content produces same hash', () async {
+      final tempDir = Directory.systemTemp.createTempSync('hash_test2');
+      final file1 = File('${tempDir.path}/a.txt');
+      final file2 = File('${tempDir.path}/b.txt');
+      file1.writeAsStringSync('identical content');
+      file2.writeAsStringSync('identical content');
+
+      final hash1 = await PhotoImportService.computeFileHash(file1);
+      final hash2 = await PhotoImportService.computeFileHash(file2);
+      expect(hash1, hash2);
+
+      tempDir.deleteSync(recursive: true);
+    });
+
+    test('different content produces different hash', () async {
+      final tempDir = Directory.systemTemp.createTempSync('hash_test3');
+      final file1 = File('${tempDir.path}/a.txt');
+      final file2 = File('${tempDir.path}/b.txt');
+      file1.writeAsStringSync('content A');
+      file2.writeAsStringSync('content B');
+
+      final hash1 = await PhotoImportService.computeFileHash(file1);
+      final hash2 = await PhotoImportService.computeFileHash(file2);
+      expect(hash1, isNot(hash2));
+
+      tempDir.deleteSync(recursive: true);
+    });
+
+    test('hash is a 64-character hex string', () async {
+      final tempDir = Directory.systemTemp.createTempSync('hash_test4');
+      final file = File('${tempDir.path}/test.bin');
+      file.writeAsBytesSync([0, 1, 2, 3, 255]);
+
+      final hash = await PhotoImportService.computeFileHash(file);
+      expect(hash.length, 64);
+      expect(RegExp(r'^[0-9a-f]{64}$').hasMatch(hash), isTrue);
+
+      tempDir.deleteSync(recursive: true);
     });
   });
 }

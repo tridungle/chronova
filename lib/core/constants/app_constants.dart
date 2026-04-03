@@ -6,7 +6,7 @@ class AppConstants {
   static const String appTagline = 'Your Life, Beautifully Mapped';
   static const String appVersion = '1.0.0';
   static const String dbName = 'chronova.db';
-  static const int dbVersion = 1;
+  static const int dbVersion = 2;
 
   // Map tile URLs
   static const String osmTileUrl =

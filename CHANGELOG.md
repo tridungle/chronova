@@ -1,5 +1,37 @@
 # Changelog
 
+## Session 9 — 2026-04-03 (Duplicate Photo Detection on Import)
+
+### Added
+
+- **SHA-256 duplicate detection** — During photo import, each file's SHA-256 hash is computed and checked against both the current batch and existing photos in the database. Duplicate files are silently skipped and reported in the import result summary as "Duplicates skipped".
+- `file_hash` column in `photos` table — Stores the SHA-256 hex digest of the original file content. Indexed for fast lookups.
+- `file_hash` field on `Photo` model — Included in `toMap()`, `fromMap()`, and `copyWith()` with sentinel null-out support.
+- `PhotoRepository.existsByHash(String)` — Checks if a photo with the given hash already exists (indexed query, limit 1).
+- `PhotoRepository.updateFileHash(String id, String hash)` — Updates the hash for a single photo (used for backfilling).
+- `PhotoImportService.computeFileHash(File)` — Public static method that computes SHA-256 via streaming (`sha256.bind(file.openRead())`), avoiding loading entire files into memory.
+- `ImportResult.duplicateCount` field — Tracks how many files were skipped as duplicates during import.
+- Import result screen now shows an orange "Duplicates skipped" row with `Icons.copy_all_rounded` when duplicates are detected.
+- **Backfill support** — The existing "Re-scan EXIF Data" dialog in Settings now also computes and stores `file_hash` for any photo that has a null hash (i.e., photos imported before this feature).
+- 6 new tests: `ImportResult.duplicateCount`, `computeFileHash` (SHA-256 correctness, same content = same hash, different content = different hash, 64-char hex format).
+
+### Changed
+
+- Database version bumped from 1 to 2 with migration (`ALTER TABLE photos ADD COLUMN file_hash TEXT` + index).
+- `PhotoImportService._processFiles()` now computes hash before copying, checks for duplicates both within the batch (`batchHashes` set) and in the database, and skips duplicates without copying.
+- Batch-internal duplicate tracking via `Set<String>` prevents importing the same file twice within a single import batch.
+
+### Dependencies
+
+- Added `crypto` package (promoted from transitive to direct dependency) for SHA-256 hashing.
+
+### Tests
+
+- Added 6 new tests for duplicate detection and file hashing.
+- Total tests: **118** (up from 112).
+
+---
+
 ## Session 8 — 2026-04-03 (Timeline Layout Refinements)
 
 ### Added

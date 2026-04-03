@@ -79,6 +79,7 @@ class AppDatabase {
         width INTEGER,
         height INTEGER,
         file_size INTEGER,
+        file_hash TEXT,
         note TEXT,
         mood TEXT,
         tags TEXT,
@@ -114,6 +115,7 @@ class AppDatabase {
     await db.execute(
       'CREATE INDEX idx_photos_location ON photos(latitude, longitude)',
     );
+    await db.execute('CREATE INDEX idx_photos_file_hash ON photos(file_hash)');
     await db.execute(
       'CREATE INDEX idx_journal_trip_id ON journal_entries(trip_id)',
     );
@@ -121,7 +123,13 @@ class AppDatabase {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle future migrations here
+    if (oldVersion < 2) {
+      // Add file_hash column for duplicate detection (SHA-256 of file content)
+      await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
+      await db.execute(
+        'CREATE INDEX idx_photos_file_hash ON photos(file_hash)',
+      );
+    }
   }
 
   Future<void> close() async {

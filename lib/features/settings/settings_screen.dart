@@ -8,6 +8,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../services/photo_import_service.dart';
 
 /// App settings screen with theme toggle and other options.
 class SettingsScreen extends ConsumerWidget {
@@ -426,6 +427,17 @@ class _RescanExifDialogState extends State<_RescanExifDialog> {
           _updated++;
         } else {
           _skipped++;
+        }
+
+        // Backfill file_hash if missing (for photos imported before
+        // duplicate detection was added)
+        if (photo.fileHash == null) {
+          try {
+            final hash = await PhotoImportService.computeFileHash(file);
+            await photoRepo.updateFileHash(photo.id, hash);
+          } catch (_) {
+            // Non-critical — skip hash backfill errors silently
+          }
         }
       } catch (e) {
         _errors++;

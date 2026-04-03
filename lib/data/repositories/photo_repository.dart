@@ -192,6 +192,31 @@ class PhotoRepository {
     await batch.commit(noResult: true);
   }
 
+  /// Check if a photo with the given file hash already exists in the database.
+  /// Used for duplicate detection during import.
+  Future<bool> existsByHash(String fileHash) async {
+    final db = await _database;
+    final result = await db.query(
+      'photos',
+      columns: ['id'],
+      where: 'file_hash = ?',
+      whereArgs: [fileHash],
+      limit: 1,
+    );
+    return result.isNotEmpty;
+  }
+
+  /// Update the file_hash for a single photo (used for backfilling).
+  Future<void> updateFileHash(String id, String fileHash) async {
+    final db = await _database;
+    await db.update(
+      'photos',
+      {'file_hash': fileHash, 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   /// Update EXIF metadata fields for a single photo.
   /// Used by the re-scan EXIF feature to refresh metadata from files.
   Future<void> updateExifFields(

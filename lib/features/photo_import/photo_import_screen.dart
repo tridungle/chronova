@@ -361,6 +361,15 @@ class _ImportResultView extends StatelessWidget {
               color: Colors.red,
             ),
           ],
+          if (result.duplicateCount > 0) ...[
+            const SizedBox(height: 12),
+            _ResultStat(
+              icon: Icons.copy_all_rounded,
+              label: 'Duplicates skipped',
+              value: '${result.duplicateCount}',
+              color: Colors.orange,
+            ),
+          ],
         ],
       ],
     ).animate().fadeIn(duration: 500.ms);

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
@@ -15,6 +16,7 @@ class ImportResult {
   final int totalFiles;
   final int successCount;
   final int failedCount;
+  final int duplicateCount;
   final int withExifDate;
   final int withGps;
   final List<Photo> photos;
@@ -23,6 +25,7 @@ class ImportResult {
     required this.totalFiles,
     required this.successCount,
     required this.failedCount,
+    required this.duplicateCount,
     required this.withExifDate,
     required this.withGps,
     required this.photos,
@@ -60,6 +63,7 @@ class PhotoImportService {
         totalFiles: 0,
         successCount: 0,
         failedCount: 0,
+        duplicateCount: 0,
         withExifDate: 0,
         withGps: 0,
         photos: [],
@@ -83,7 +87,8 @@ class PhotoImportService {
     return _processFiles(files: files, tripId: tripId, onProgress: onProgress);
   }
 
-  /// Core processing: read EXIF, copy to app storage, save to DB.
+  /// Core processing: read EXIF, compute hash, skip duplicates, copy to app
+  /// storage, save to DB.
   Future<ImportResult> _processFiles({
     required List<File> files,
     String? tripId,
@@ -98,8 +103,12 @@ class PhotoImportService {
     final photos = <Photo>[];
     int successCount = 0;
     int failedCount = 0;
+    int duplicateCount = 0;
     int withExifDate = 0;
     int withGps = 0;
+
+    // Track hashes within this batch to catch duplicates within the same import
+    final batchHashes = <String>{};
 
     for (int i = 0; i < files.length; i++) {
       onProgress?.call(i + 1, files.length);
@@ -110,6 +119,17 @@ class PhotoImportService {
           failedCount++;
           continue;
         }
+
+        // Compute SHA-256 hash of the file content for duplicate detection
+        final fileHash = await _computeFileHash(file);
+
+        // Check for duplicates: within this batch AND in the database
+        if (batchHashes.contains(fileHash) ||
+            await _photoRepository.existsByHash(fileHash)) {
+          duplicateCount++;
+          continue;
+        }
+        batchHashes.add(fileHash);
 
         // Extract EXIF
         final exif = await _exifService.extractFromFile(file.path);
@@ -136,6 +156,7 @@ class PhotoImportService {
           width: exif.width,
           height: exif.height,
           fileSize: fileSize,
+          fileHash: fileHash,
           sortOrder: i,
           createdAt: now,
           updatedAt: now,
@@ -160,9 +181,21 @@ class PhotoImportService {
       totalFiles: files.length,
       successCount: successCount,
       failedCount: failedCount,
+      duplicateCount: duplicateCount,
       withExifDate: withExifDate,
       withGps: withGps,
       photos: photos,
     );
+  }
+
+  /// Compute SHA-256 hash of a file's content.
+  ///
+  /// Reads the file as a stream to avoid loading the entire file into memory,
+  /// which is important for large photo files.
+  static Future<String> computeFileHash(File file) => _computeFileHash(file);
+
+  static Future<String> _computeFileHash(File file) async {
+    final digest = await sha256.bind(file.openRead()).first;
+    return digest.toString();
   }
 }
