@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -32,21 +33,27 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Spacer(),
-
-            // Main illustration / status
-            if (_result != null)
-              _ImportResultView(result: _result!)
-            else if (_isImporting)
-              _ImportingView(
-                current: _currentProgress,
-                total: _totalProgress,
-                message: _statusMessage,
-              )
-            else
-              _ImportPrompt(onPickFromGallery: _pickFromGallery),
-
-            const Spacer(),
+            // Main illustration / status — centered in available space
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  child:
+                      _result != null
+                          ? _ImportResultView(result: _result!)
+                          : _isImporting
+                          ? _ImportingView(
+                            current: _currentProgress,
+                            total: _totalProgress,
+                            message: _statusMessage,
+                          )
+                          : _ImportPrompt(
+                            onPickFromGallery: _pickFromGallery,
+                            onTakePhoto: _takePhoto,
+                            onPickFromFiles: _pickFromFiles,
+                          ),
+                ),
+              ),
+            ),
 
             // Bottom actions
             if (_result != null)
@@ -54,7 +61,6 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Invalidate providers to reload data
                     ref.invalidate(allPhotosProvider);
                     ref.invalidate(timelineDaysProvider);
                     ref.invalidate(geoPhotosProvider);
@@ -79,58 +85,134 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
     try {
       final importService = ref.read(photoImportServiceProvider);
       final result = await importService.pickAndImportPhotos(
-        onProgress: (current, total) {
-          if (!mounted) return;
-          setState(() {
-            _currentProgress = current;
-            _totalProgress = total;
-            _statusMessage = 'Processing photo $current of $total...';
-          });
-        },
+        onProgress: _onProgress,
+      );
+      await _postImport(result);
+    } catch (e) {
+      _handleImportError(e);
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    setState(() {
+      _isImporting = true;
+      _statusMessage = 'Opening camera...';
+    });
+
+    try {
+      final importService = ref.read(photoImportServiceProvider);
+      final result = await importService.takeAndImportPhoto(
+        onProgress: _onProgress,
+      );
+      await _postImport(result);
+    } catch (e) {
+      _handleImportError(e);
+    }
+  }
+
+  Future<void> _pickFromFiles() async {
+    setState(() {
+      _isImporting = true;
+      _statusMessage = 'Selecting files...';
+    });
+
+    try {
+      final pickerResult = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: true,
       );
 
-      // Reverse geocode photos with GPS data
-      if (result.withGps > 0) {
+      if (pickerResult == null || pickerResult.files.isEmpty) {
         if (mounted) {
-          setState(() => _statusMessage = 'Resolving locations...');
+          setState(() {
+            _isImporting = false;
+            _statusMessage = '';
+          });
         }
-        final locationService = ref.read(locationServiceProvider);
-        final photoRepo = ref.read(photoRepositoryProvider);
+        return;
+      }
 
-        for (final photo in result.photos) {
-          if (photo.hasLocation) {
-            try {
-              final name = await locationService.getLocationName(
-                photo.latitude!,
-                photo.longitude!,
+      final paths =
+          pickerResult.files
+              .where((f) => f.path != null)
+              .map((f) => f.path!)
+              .toList();
+
+      if (paths.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isImporting = false;
+            _statusMessage = '';
+          });
+        }
+        return;
+      }
+
+      final importService = ref.read(photoImportServiceProvider);
+      final result = await importService.importFromPaths(
+        paths: paths,
+        onProgress: _onProgress,
+      );
+      await _postImport(result);
+    } catch (e) {
+      _handleImportError(e);
+    }
+  }
+
+  void _onProgress(int current, int total) {
+    if (!mounted) return;
+    setState(() {
+      _currentProgress = current;
+      _totalProgress = total;
+      _statusMessage = 'Processing photo $current of $total...';
+    });
+  }
+
+  /// Shared post-import logic: reverse geocode + update state.
+  Future<void> _postImport(ImportResult result) async {
+    // Reverse geocode photos with GPS data
+    if (result.withGps > 0) {
+      if (mounted) {
+        setState(() => _statusMessage = 'Resolving locations...');
+      }
+      final locationService = ref.read(locationServiceProvider);
+      final photoRepo = ref.read(photoRepositoryProvider);
+
+      for (final photo in result.photos) {
+        if (photo.hasLocation) {
+          try {
+            final name = await locationService.getLocationName(
+              photo.latitude!,
+              photo.longitude!,
+            );
+            if (name != null) {
+              await photoRepo.update(
+                photo.copyWith(locationName: name, updatedAt: DateTime.now()),
               );
-              if (name != null) {
-                await photoRepo.update(
-                  photo.copyWith(locationName: name, updatedAt: DateTime.now()),
-                );
-              }
-            } catch (_) {
-              // Skip geocoding errors silently
             }
+          } catch (_) {
+            // Skip geocoding errors silently
           }
         }
       }
+    }
 
-      if (mounted) {
-        HapticFeedback.mediumImpact();
-        setState(() {
-          _isImporting = false;
-          _result = result;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isImporting = false;
-          _statusMessage = 'Error: $e';
-        });
-        context.showSnackBar('Import failed: $e', isError: true);
-      }
+    if (mounted) {
+      HapticFeedback.mediumImpact();
+      setState(() {
+        _isImporting = false;
+        _result = result;
+      });
+    }
+  }
+
+  void _handleImportError(Object e) {
+    if (mounted) {
+      setState(() {
+        _isImporting = false;
+        _statusMessage = 'Error: $e';
+      });
+      context.showSnackBar('Import failed: $e', isError: true);
     }
   }
 }
@@ -138,8 +220,14 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
 /// Prompt view when nothing is importing yet.
 class _ImportPrompt extends StatelessWidget {
   final VoidCallback onPickFromGallery;
+  final VoidCallback onTakePhoto;
+  final VoidCallback onPickFromFiles;
 
-  const _ImportPrompt({required this.onPickFromGallery});
+  const _ImportPrompt({
+    required this.onPickFromGallery,
+    required this.onTakePhoto,
+    required this.onPickFromFiles,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -187,6 +275,30 @@ class _ImportPrompt extends StatelessWidget {
           ),
         ).animate().fadeIn(delay: 600.ms, duration: 500.ms),
 
+        const SizedBox(height: 12),
+
+        // Camera button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onTakePhoto,
+            icon: const Icon(Icons.camera_alt_rounded),
+            label: const Text('Take a Photo'),
+          ),
+        ).animate().fadeIn(delay: 700.ms, duration: 500.ms),
+
+        const SizedBox(height: 12),
+
+        // File picker button
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onPickFromFiles,
+            icon: const Icon(Icons.folder_open_rounded),
+            label: const Text('Import from Files'),
+          ),
+        ).animate().fadeIn(delay: 800.ms, duration: 500.ms),
+
         const SizedBox(height: 16),
 
         // Info text
@@ -217,7 +329,7 @@ class _ImportPrompt extends StatelessWidget {
               ),
             ],
           ),
-        ).animate().fadeIn(delay: 800.ms, duration: 500.ms),
+        ).animate().fadeIn(delay: 900.ms, duration: 500.ms),
       ],
     );
   }

@@ -12,6 +12,7 @@ import 'package:image/image.dart' as img;
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/constants/app_constants.dart';
@@ -631,6 +632,41 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
 
   // ─── Waypoint reordering ────────────────────────────────────────
 
+  /// Preference key for persisted waypoint order (list of photo IDs).
+  static const _waypointOrderKey = 'video_export_waypoint_order';
+
+  /// Save the current waypoint order to shared preferences.
+  Future<void> _saveWaypointOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ids = _geoPhotos.map((p) => p.id).toList();
+    await prefs.setStringList(_waypointOrderKey, ids);
+  }
+
+  /// Apply any previously saved waypoint order to the given photos.
+  /// Returns the reordered list, or the original if no saved order exists
+  /// or the set of photo IDs has changed.
+  Future<List<Photo>> _applySavedOrder(List<Photo> photos) async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedIds = prefs.getStringList(_waypointOrderKey);
+    if (savedIds == null || savedIds.isEmpty) return photos;
+
+    // Build a lookup by ID
+    final photoMap = {for (final p in photos) p.id: p};
+    final currentIds = photoMap.keys.toSet();
+    final savedIdSet = savedIds.toSet();
+
+    // Only apply if the saved set matches the current set of photos
+    if (!currentIds.containsAll(savedIdSet) ||
+        !savedIdSet.containsAll(currentIds)) {
+      // Photo set has changed — discard saved order
+      await prefs.remove(_waypointOrderKey);
+      return photos;
+    }
+
+    // Reorder according to saved IDs
+    return savedIds.map((id) => photoMap[id]!).toList();
+  }
+
   /// Shows a bottom sheet with a drag-to-reorder list of waypoints.
   /// Users can rearrange photo waypoints before exporting.
   void _showReorderSheet() {
@@ -773,7 +809,8 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
                   .map((p) => LatLng(p.latitude!, p.longitude!))
                   .toList();
         });
-        // Re-fetch the route with the new waypoint order
+        // Persist the new order and re-fetch the route
+        _saveWaypointOrder();
         _fetchRoute();
       }
     });
@@ -812,13 +849,21 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
 
             // Re-fetch route if waypoints changed
             if (!_listEquals(newWaypoints, _waypoints)) {
-              _geoPhotos = newPhotos;
-              _waypoints = newWaypoints;
-              if (_waypoints.length >= 2) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _fetchRoute();
+              // Apply saved waypoint order (async — fires route fetch after)
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                final orderedPhotos = await _applySavedOrder(newPhotos);
+                if (!mounted) return;
+                setState(() {
+                  _geoPhotos = orderedPhotos;
+                  _waypoints =
+                      orderedPhotos
+                          .map((p) => LatLng(p.latitude!, p.longitude!))
+                          .toList();
                 });
-              }
+                if (_waypoints.length >= 2) {
+                  _fetchRoute();
+                }
+              });
             }
           }
 
@@ -1067,8 +1112,8 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
           // Play/pause overlay
           if (!_isExporting)
             Positioned(
-              top: 16,
-              right: 16,
+              top: (_routeError != null && !_isFetchingRoute) ? 48 : 12,
+              right: 12,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

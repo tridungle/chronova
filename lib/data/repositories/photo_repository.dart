@@ -194,27 +194,73 @@ class PhotoRepository {
 
   /// Check if a photo with the given file hash already exists in the database.
   /// Used for duplicate detection during import.
+  ///
+  /// Gracefully returns `false` if the `file_hash` column doesn't exist yet
+  /// (e.g. migration was skipped during hot reload). Also attempts to add
+  /// the column so subsequent calls succeed.
   Future<bool> existsByHash(String fileHash) async {
     final db = await _database;
-    final result = await db.query(
-      'photos',
-      columns: ['id'],
-      where: 'file_hash = ?',
-      whereArgs: [fileHash],
-      limit: 1,
-    );
-    return result.isNotEmpty;
+    try {
+      final result = await db.query(
+        'photos',
+        columns: ['id'],
+        where: 'file_hash = ?',
+        whereArgs: [fileHash],
+        limit: 1,
+      );
+      return result.isNotEmpty;
+    } on DatabaseException catch (e) {
+      if (e.toString().contains('no such column: file_hash')) {
+        // Column missing — attempt to add it now
+        try {
+          await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+          );
+        } catch (_) {
+          // Column may already exist from a concurrent call — ignore
+        }
+        return false;
+      }
+      rethrow;
+    }
   }
 
   /// Update the file_hash for a single photo (used for backfilling).
+  /// Silently skips if the column doesn't exist yet.
   Future<void> updateFileHash(String id, String fileHash) async {
     final db = await _database;
-    await db.update(
-      'photos',
-      {'file_hash': fileHash, 'updated_at': DateTime.now().toIso8601String()},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    try {
+      await db.update(
+        'photos',
+        {'file_hash': fileHash, 'updated_at': DateTime.now().toIso8601String()},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } on DatabaseException catch (e) {
+      if (e.toString().contains('no such column: file_hash')) {
+        // Column missing — attempt to add it, then retry
+        try {
+          await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
+          await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+          );
+          await db.update(
+            'photos',
+            {
+              'file_hash': fileHash,
+              'updated_at': DateTime.now().toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+        } catch (_) {
+          // Best-effort — skip if still failing
+        }
+      } else {
+        rethrow;
+      }
+    }
   }
 
   /// Update EXIF metadata fields for a single photo.

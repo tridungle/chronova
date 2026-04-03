@@ -1,5 +1,30 @@
 # Changelog
 
+## Session 11 — 2026-04-03 (Bug Fixes & Import Enhancements)
+
+### Fixed
+
+- **DB migration still failing on cached singleton** — The `_onOpen` callback from Session 10 was insufficient because the `_database` singleton getter returns the cached instance without calling `openDatabase()` again, so `_onOpen`/`_onUpgrade` never fire after initial app launch. Added `_schemaVerified` flag and `_ensureSchema(Database)` method to `AppDatabase` that runs `PRAGMA table_info(photos)` on the first `database` access per session (even when cached) and adds the `file_hash` column + index if missing. Also made `PhotoRepository.existsByHash()` and `updateFileHash()` defensive with try/catch for `DatabaseException` — auto-adds the column and retries/returns gracefully.
+- **Loading indicator not centered in import screen** — Replaced `Spacer()` + conditional widget layout with `Expanded(child: Center(child: SingleChildScrollView(...)))` pattern. Content is now always vertically centered in available space, with scroll support if content exceeds height.
+- **Video export play/pause buttons overlapping with route error banner** — The `Positioned` overlay for play/pause buttons now uses a dynamic `top` value: `48` when the route error banner is visible, `12` otherwise.
+
+### Added
+
+- **Camera import ("Take a Photo")** — New `takeAndImportPhoto()` method in `PhotoImportService` using `ImagePicker.pickImage(source: ImageSource.camera)`. Accessible from the import screen as a second button option.
+- **File picker import ("Import from Files")** — Uses `file_picker` package (`FilePicker.platform.pickFiles()`) to allow importing photos from the device file system. Accessible from the import screen as a third button option.
+- **Waypoint reorder persistence** — Video export screen now saves/restores waypoint order via `SharedPreferences`. The reorder sheet calls `_saveWaypointOrder()` after applying changes. On data load, `_applySavedOrder()` restores the saved order (discards if photo set has changed).
+
+### Changed
+
+- **Import screen refactored** — Extracted shared `_onProgress()`, `_postImport()`, and `_handleImportError()` helpers to reduce duplication across the three import paths (gallery, camera, files).
+- **`_ImportPrompt` now shows 3 import options** — "Choose from Gallery" (primary filled button), "Take a Photo" (outlined), and "Import from Files" (outlined). Previously only showed the gallery option.
+
+### Dependencies
+
+- Added `file_picker: ^8.0.0` for file system import support.
+
+---
+
 ## Session 10 — 2026-04-03 (DB Migration & Hero Tag Bug Fixes)
 
 ### Fixed

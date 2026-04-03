@@ -77,6 +77,36 @@ class PhotoImportService {
     );
   }
 
+  /// Take a photo with the camera and import it.
+  Future<ImportResult> takeAndImportPhoto({
+    String? tripId,
+    void Function(int current, int total)? onProgress,
+  }) async {
+    final pickedFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 100,
+      requestFullMetadata: true,
+    );
+
+    if (pickedFile == null) {
+      return const ImportResult(
+        totalFiles: 0,
+        successCount: 0,
+        failedCount: 0,
+        duplicateCount: 0,
+        withExifDate: 0,
+        withGps: 0,
+        photos: [],
+      );
+    }
+
+    return _processFiles(
+      files: [File(pickedFile.path)],
+      tripId: tripId,
+      onProgress: onProgress,
+    );
+  }
+
   /// Import photos from a list of file paths.
   Future<ImportResult> importFromPaths({
     required List<String> paths,

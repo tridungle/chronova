@@ -17,9 +17,17 @@ class AppDatabase {
 
   Database? _database;
   Completer<Database>? _completer;
+  bool _schemaVerified = false;
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null) {
+      // Ensure schema is correct even on cached instances (hot reload safety)
+      if (!_schemaVerified) {
+        await _ensureSchema(_database!);
+        _schemaVerified = true;
+      }
+      return _database!;
+    }
 
     // If initialization is already in progress, wait for it
     if (_completer != null) return _completer!.future;
@@ -27,6 +35,7 @@ class AppDatabase {
     _completer = Completer<Database>();
     try {
       _database = await _initDatabase();
+      _schemaVerified = true; // _onOpen already verified
       _completer!.complete(_database!);
     } catch (e) {
       _completer!.completeError(e);
@@ -47,6 +56,29 @@ class AppDatabase {
       onUpgrade: _onUpgrade,
       onOpen: _onOpen,
     );
+  }
+
+  /// Ensures the DB schema has all expected columns.
+  ///
+  /// This runs on the first `database` access per app session, even if
+  /// the cached `_database` instance pre-dates a code change that added
+  /// new columns. Handles the hot-reload case where `_onOpen`/`_onUpgrade`
+  /// were never called because `openDatabase()` was never re-invoked.
+  Future<void> _ensureSchema(Database db) async {
+    try {
+      final columns = await db.rawQuery('PRAGMA table_info(photos)');
+      final columnNames = columns.map((c) => c['name'] as String).toSet();
+
+      if (!columnNames.contains('file_hash')) {
+        await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+        );
+        debugPrint('AppDatabase: added file_hash column via _ensureSchema');
+      }
+    } catch (e) {
+      debugPrint('AppDatabase: _ensureSchema failed: $e');
+    }
   }
 
   /// Safety net: ensure all expected columns exist even if _onUpgrade was
@@ -163,6 +195,7 @@ class AppDatabase {
       await db.close();
       _database = null;
       _completer = null;
+      _schemaVerified = false;
     }
   }
 }
