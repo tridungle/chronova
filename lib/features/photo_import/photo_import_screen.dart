@@ -12,7 +12,10 @@ import '../../services/photo_import_service.dart';
 
 /// Screen for importing photos with EXIF processing and progress feedback.
 class PhotoImportScreen extends ConsumerStatefulWidget {
-  const PhotoImportScreen({super.key});
+  /// Optional trip ID — when set, imported photos are assigned to this trip.
+  final String? tripId;
+
+  const PhotoImportScreen({super.key, this.tripId});
 
   @override
   ConsumerState<PhotoImportScreen> createState() => _PhotoImportScreenState();
@@ -65,6 +68,12 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
                     ref.invalidate(timelineDaysProvider);
                     ref.invalidate(geoPhotosProvider);
                     ref.invalidate(photoCountProvider);
+                    // Refresh trip-specific providers when importing into a trip
+                    if (widget.tripId != null) {
+                      ref.invalidate(tripPhotosProvider(widget.tripId!));
+                      ref.invalidate(tripTimelineDaysProvider(widget.tripId!));
+                      ref.invalidate(tripPhotoCountProvider(widget.tripId!));
+                    }
                     context.pop();
                   },
                   child: const Text('Done'),
@@ -85,6 +94,7 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
     try {
       final importService = ref.read(photoImportServiceProvider);
       final result = await importService.pickAndImportPhotos(
+        tripId: widget.tripId,
         onProgress: _onProgress,
       );
       await _postImport(result);
@@ -102,6 +112,7 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
     try {
       final importService = ref.read(photoImportServiceProvider);
       final result = await importService.takeAndImportPhoto(
+        tripId: widget.tripId,
         onProgress: _onProgress,
       );
       await _postImport(result);
@@ -151,6 +162,7 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
       final importService = ref.read(photoImportServiceProvider);
       final result = await importService.importFromPaths(
         paths: paths,
+        tripId: widget.tripId,
         onProgress: _onProgress,
       );
       await _postImport(result);
@@ -411,6 +423,26 @@ class _ImportResultView extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
     final success = result.successCount > 0;
+    final allDuplicates =
+        !success && result.duplicateCount > 0 && result.totalFiles > 0;
+
+    // Determine headline and icon based on outcome
+    final String headline;
+    final IconData icon;
+    final Color iconColor;
+    if (success) {
+      headline = 'Import Complete!';
+      icon = Icons.check_circle_rounded;
+      iconColor = Colors.green;
+    } else if (allDuplicates) {
+      headline = 'All Duplicates';
+      icon = Icons.copy_all_rounded;
+      iconColor = Colors.orange;
+    } else {
+      headline = 'No Photos Selected';
+      icon = Icons.warning_amber_rounded;
+      iconColor = Colors.orange;
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -419,28 +451,27 @@ class _ImportResultView extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color:
-                    success
-                        ? Colors.green.withValues(alpha: 0.1)
-                        : Colors.orange.withValues(alpha: 0.1),
+                color: iconColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                success
-                    ? Icons.check_circle_rounded
-                    : Icons.warning_amber_rounded,
-                size: 44,
-                color: success ? Colors.green : Colors.orange,
-              ),
+              child: Icon(icon, size: 44, color: iconColor),
             )
             .animate()
             .fadeIn(duration: 400.ms)
             .scale(begin: const Offset(0.5, 0.5), curve: Curves.elasticOut),
         const SizedBox(height: 20),
         Text(
-          success ? 'Import Complete!' : 'No Photos Selected',
+          headline,
           style: AppTextStyles.headline2,
         ).animate().fadeIn(delay: 200.ms),
+        if (allDuplicates) ...[
+          const SizedBox(height: 8),
+          Text(
+            'All ${result.duplicateCount} photo${result.duplicateCount == 1 ? '' : 's'} already exist in your library.',
+            style: AppTextStyles.body2.copyWith(color: Colors.grey),
+            textAlign: TextAlign.center,
+          ).animate().fadeIn(delay: 300.ms),
+        ],
         const SizedBox(height: 24),
 
         if (success) ...[

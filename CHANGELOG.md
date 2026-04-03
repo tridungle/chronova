@@ -7,17 +7,24 @@
 - **DB migration still failing on cached singleton** — The `_onOpen` callback from Session 10 was insufficient because the `_database` singleton getter returns the cached instance without calling `openDatabase()` again, so `_onOpen`/`_onUpgrade` never fire after initial app launch. Added `_schemaVerified` flag and `_ensureSchema(Database)` method to `AppDatabase` that runs `PRAGMA table_info(photos)` on the first `database` access per session (even when cached) and adds the `file_hash` column + index if missing. Also made `PhotoRepository.existsByHash()` and `updateFileHash()` defensive with try/catch for `DatabaseException` — auto-adds the column and retries/returns gracefully.
 - **Loading indicator not centered in import screen** — Replaced `Spacer()` + conditional widget layout with `Expanded(child: Center(child: SingleChildScrollView(...)))` pattern. Content is now always vertically centered in available space, with scroll support if content exceeds height.
 - **Video export play/pause buttons overlapping with route error banner** — The `Positioned` overlay for play/pause buttons now uses a dynamic `top` value: `48` when the route error banner is visible, `12` otherwise.
+- **Photos imported from trip detail not assigned to trip** — The "Import Photos" button on the trip detail screen navigated to `/import` without passing the `tripId`, so imported photos had `tripId: null` and never appeared in the trip. Fixed by passing `tripId` via `GoRouter.extra` to `PhotoImportScreen`, which now forwards it to all import service methods. The import result "Done" button also invalidates trip-specific providers (`tripPhotosProvider`, `tripTimelineDaysProvider`, `tripPhotoCountProvider`) so the trip detail refreshes.
+- **"No Photos Selected" shown when all imports are duplicates** — Previously, when all selected photos were already in the library (duplicates), the result screen showed a generic "No Photos Selected" message. Now shows "All Duplicates" with an explanatory subtitle.
 
 ### Added
 
 - **Camera import ("Take a Photo")** — New `takeAndImportPhoto()` method in `PhotoImportService` using `ImagePicker.pickImage(source: ImageSource.camera)`. Accessible from the import screen as a second button option.
 - **File picker import ("Import from Files")** — Uses `file_picker` package (`FilePicker.platform.pickFiles()`) to allow importing photos from the device file system. Accessible from the import screen as a third button option.
 - **Waypoint reorder persistence** — Video export screen now saves/restores waypoint order via `SharedPreferences`. The reorder sheet calls `_saveWaypointOrder()` after applying changes. On data load, `_applySavedOrder()` restores the saved order (discards if photo set has changed).
+- **Assign existing photos to trip** — New bottom sheet on the trip detail screen (`_AssignPhotosSheet`) shows all unassigned photos in a selectable grid. Users can pick individual photos or "Select All", then assign them to the current trip via `PhotoRepository.assignToTrip()`. Accessible from the empty state and from a new "Add photos" popup menu in the app bar.
+- **"Add photos" popup menu in trip detail app bar** — New `PopupMenuButton` with "Import New Photos" and "Assign Existing Photos" options, available even when the trip already has photos.
 
 ### Changed
 
 - **Import screen refactored** — Extracted shared `_onProgress()`, `_postImport()`, and `_handleImportError()` helpers to reduce duplication across the three import paths (gallery, camera, files).
 - **`_ImportPrompt` now shows 3 import options** — "Choose from Gallery" (primary filled button), "Take a Photo" (outlined), and "Import from Files" (outlined). Previously only showed the gallery option.
+- **`PhotoImportScreen` accepts optional `tripId`** — When provided (e.g., from trip detail), all import paths forward it to the service so photos are created with `tripId` set.
+- **`/import` route accepts `tripId` via `GoRouter.extra`** — Router extracts `tripId` from `state.uri.queryParameters` or `state.extra` and passes it to `PhotoImportScreen`.
+- **Trip detail empty state improved** — Now shows two buttons: "Import Photos" (with `tripId`) and "Assign Existing Photos" (opens selection bottom sheet).
 
 ### Dependencies
 

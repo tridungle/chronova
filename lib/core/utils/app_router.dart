@@ -59,7 +59,12 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/import',
       parentNavigatorKey: _rootNavigatorKey,
-      builder: (context, state) => const PhotoImportScreen(),
+      builder: (context, state) {
+        // Accept optional tripId via query parameter or extra
+        final tripId =
+            state.uri.queryParameters['tripId'] ?? state.extra as String?;
+        return PhotoImportScreen(tripId: tripId);
+      },
     ),
     GoRoute(
       path: '/export',
