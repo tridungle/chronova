@@ -69,13 +69,24 @@ class ExifService {
         data['EXIF DateTimeDigitized']?.printable ??
         data['Image DateTime']?.printable;
 
+    return parseExifDateString(dateStr);
+  }
+
+  /// Parse an EXIF date string like "2024:01:15 14:30:00" into a [DateTime].
+  ///
+  /// EXIF stores dates with colons in the date portion (yyyy:MM:dd HH:mm:ss).
+  /// This converts it to ISO 8601 format before parsing.
+  /// Returns null if the string is null, empty, or unparseable.
+  @visibleForTesting
+  static DateTime? parseExifDateString(String? dateStr) {
     if (dateStr == null || dateStr.isEmpty) return null;
 
     try {
       // EXIF date format: "2024:01:15 14:30:00"
-      final cleaned = dateStr.replaceFirst(
+      // Convert to ISO 8601: "2024-01-15 14:30:00"
+      final cleaned = dateStr.replaceFirstMapped(
         RegExp(r'^(\d{4}):(\d{2}):(\d{2})'),
-        r'$1-$2-$3',
+        (m) => '${m[1]}-${m[2]}-${m[3]}',
       );
       return DateTime.tryParse(cleaned);
     } catch (_) {

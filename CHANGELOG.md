@@ -1,6 +1,94 @@
 # Changelog
 
-## Session 2 — 2026-04-03
+## Session 5 — 2026-04-03 (Runtime Bug Fixes & Regression Tests)
+
+### Fixed (Critical)
+
+- **EXIF date parsing completely broken** — `replaceFirst(RegExp(...), r'$1-$2-$3')` inserted literal `$1-$2-$3` instead of backreferences. Changed to `replaceFirstMapped` so EXIF dates (e.g. `"2024:01:15 14:30:00"`) are correctly parsed. All previously imported photos had null `dateTaken` due to this bug.
+- **Map tile DNS failures** — Added `errorImage` (transparent 1x1 PNG via `MemoryImage`) and `evictErrorTileStrategy: EvictErrorTileStrategy.dispose` to both `TileLayer` instances in `map_screen.dart` and `video_export_screen.dart`. Gracefully handles offline/DNS errors instead of spamming exceptions.
+
+### Improved
+
+- Extracted `ExifService.parseExifDateString()` as a `@visibleForTesting` static method for direct unit testing of EXIF date parsing logic.
+
+### Tests
+
+- Added 8 new unit tests for `ExifService.parseExifDateString()`: standard format, various dates, midnight, null/empty/unparseable inputs, date-only, and a regression test guarding against the `replaceFirst` backreference bug.
+- Total tests: **77** (up from 69).
+
+### Lint Fixes
+
+- Removed unnecessary `dart:typed_data` imports from `map_screen.dart` and `video_export_screen.dart` (already provided by `flutter/services.dart`).
+- Renamed `_makePhoto` to `makePhoto` in `timeline_day_test.dart` (no leading underscores for local identifiers).
+
+### Note
+
+- Existing photos in the database that were imported before this fix will have null `dateTaken`. Users should re-import their photos to populate date/time data correctly.
+
+---
+
+## Session 4 — 2026-04-03 (Polish, Features, Tests)
+
+### Phase 2: Polish & UX
+
+- Created reusable `ErrorRetryWidget` — replaced bare error states in 5 screens
+- Added haptic feedback across all 12+ screens (imports, taps, navigation, actions)
+- Added `RefreshIndicator` pull-to-refresh to Timeline, Trips, TripDetail screens
+- Created `ShimmerLoading` widget + `SkeletonLoaders` (timeline, trip list)
+- Added CTA "Import Photos" buttons to empty states in Map, TripDetail, VideoExport
+- Added missing Hero animations for photo transitions
+- Added try/catch to journal editor save, replaced `Future.delayed` with `Timer` debounce
+
+### Phase 3: New Features
+
+- **Overlay fade animations** — `AnimatedOpacity` + `IgnorePointer` for photo detail overlays
+- **Map popup enhancement** — `AnimatedSlide`/`AnimatedOpacity` popup with "View" button + Hero transition
+- **Photo reordering** — Drag-to-reorder photos within trips via `ReorderablePhotoGrid` widget with `updateSortOrders` repository method
+- **Video export improvements** — Configurable zoom (6-16), smoothness (5/10/15/20 fps), easing curves, estimated duration display
+
+### Phase 4: Tests
+
+- 69 unit tests: Photo, Trip, TimelineDay, JournalEntry, ExifData models + ExifService
+- `flutter analyze` clean, `flutter test` all passing
+
+---
+
+## Session 3 — 2026-04-03 (Comprehensive Bug Fix Sweep)
+
+### Fixed (Critical — 7 issues)
+
+- SQLite `as double?` cast crashes → Fixed with `(map['x'] as num?)?.toDouble()`
+- Database race condition → Fixed with `Completer` pattern
+- Division by zero in EXIF GPS → Fixed with `denominator == 0` guards
+- `setState()` after dispose → Fixed with `if (!mounted) return` guards
+- Photo detail mutating `widget.photos` + RangeError → Fixed with local copy + PageController recreation
+- `MapController` not disposed → Fixed with `dispose()` override
+- `LatLngBounds.fromPoints` crashes on empty list → Fixed with empty guard
+
+### Fixed (Warning — 10 issues)
+
+- `copyWith` cannot null out fields → Fixed with `_absent` sentinel pattern
+- Journal editor duplicates → Fixed with upsert via `getByPhotoId`
+- `TimelineDay.primaryPhoto` crashes on empty → Fixed nullable `Photo?`
+- `DateTime.parse` FormatException → Fixed with `DateTime.tryParse`
+- `FutureBuilder` in ConsumerWidget → Fixed with `tripPhotoCountProvider`
+- `TextEditingController` leak in dialogs → Fixed with `.then((_) => controller.dispose())`
+- Video export stale data → Fixed: only update when not animating/exporting
+- Map button in photo detail → Fixed with `GoRouter.of(context).go('/map')`
+- Mixed `Navigator.push`/GoRouter → Accepted as-is (valid for complex params)
+- `_colorNames` count noted, low risk
+
+### Fixed (Minor — 5 issues)
+
+- Animation delays capped at max values
+- Indicator dots limited to 10 → Shows "x / y" for >10
+- Hardcoded version → Added `AppConstants.appVersion`
+- Empty onTap → Now opens `showAboutDialog`
+- `MediaQuery.of(context)` → Replaced with `MediaQuery.sizeOf`/`viewInsetsOf`/`paddingOf`
+
+---
+
+## Session 2 — 2026-04-03 (Enhancements)
 
 ### Added
 

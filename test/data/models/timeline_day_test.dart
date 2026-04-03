@@ -5,7 +5,7 @@ import 'package:chronova/data/models/timeline_day.dart';
 void main() {
   final now = DateTime(2024, 6, 15);
 
-  Photo _makePhoto({
+  Photo makePhoto({
     required String id,
     double? latitude,
     double? longitude,
@@ -27,14 +27,14 @@ void main() {
     group('primaryPhoto', () {
       test('returns first photo with location', () {
         final photos = [
-          _makePhoto(id: 'p1'),
-          _makePhoto(
+          makePhoto(id: 'p1'),
+          makePhoto(
             id: 'p2',
             latitude: 35.0,
             longitude: 139.0,
             locationName: 'Tokyo',
           ),
-          _makePhoto(
+          makePhoto(
             id: 'p3',
             latitude: 34.0,
             longitude: 135.0,
@@ -46,7 +46,7 @@ void main() {
       });
 
       test('returns first photo when none have location', () {
-        final photos = [_makePhoto(id: 'p1'), _makePhoto(id: 'p2')];
+        final photos = [makePhoto(id: 'p1'), makePhoto(id: 'p2')];
         final day = TimelineDay(date: now, photos: photos);
         expect(day.primaryPhoto?.id, 'p1');
       });
@@ -60,16 +60,16 @@ void main() {
     group('photosWithLocation', () {
       test('counts photos with GPS coordinates', () {
         final photos = [
-          _makePhoto(id: 'p1'),
-          _makePhoto(id: 'p2', latitude: 35.0, longitude: 139.0),
-          _makePhoto(id: 'p3', latitude: 34.0, longitude: 135.0),
+          makePhoto(id: 'p1'),
+          makePhoto(id: 'p2', latitude: 35.0, longitude: 139.0),
+          makePhoto(id: 'p3', latitude: 34.0, longitude: 135.0),
         ];
         final day = TimelineDay(date: now, photos: photos);
         expect(day.photosWithLocation, 2);
       });
 
       test('returns 0 when no photos have location', () {
-        final photos = [_makePhoto(id: 'p1'), _makePhoto(id: 'p2')];
+        final photos = [makePhoto(id: 'p1'), makePhoto(id: 'p2')];
         final day = TimelineDay(date: now, photos: photos);
         expect(day.photosWithLocation, 0);
       });
@@ -78,19 +78,19 @@ void main() {
     group('locations', () {
       test('returns unique location names', () {
         final photos = [
-          _makePhoto(
+          makePhoto(
             id: 'p1',
             latitude: 35.0,
             longitude: 139.0,
             locationName: 'Tokyo',
           ),
-          _makePhoto(
+          makePhoto(
             id: 'p2',
             latitude: 35.0,
             longitude: 139.0,
             locationName: 'Tokyo',
           ),
-          _makePhoto(
+          makePhoto(
             id: 'p3',
             latitude: 34.0,
             longitude: 135.0,
@@ -103,7 +103,7 @@ void main() {
       });
 
       test('returns empty list when no photos have location names', () {
-        final photos = [_makePhoto(id: 'p1')];
+        final photos = [makePhoto(id: 'p1')];
         final day = TimelineDay(date: now, photos: photos);
         expect(day.locations, isEmpty);
       });
