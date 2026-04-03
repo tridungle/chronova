@@ -145,12 +145,20 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
   int _currentSegment = 0;
   Photo? _currentPopupPhoto;
 
+  // Camera follow mode — when true, camera auto-moves with transport icon.
+  // User can disable by interacting with the map, re-enable via a button.
+  bool _cameraFollowMode = true;
+
   // Data
   List<Photo> _geoPhotos = [];
   List<LatLng> _waypoints = []; // original photo waypoints
 
   // Progress along the routed path (index into _routedPath, fractional)
   double _progressAlongPath = 0.0;
+
+  // The current interpolated position of the transport icon — used for both
+  // the marker AND the polyline tip so they are always in perfect sync.
+  LatLng? _currentIconPosition;
 
   @override
   void initState() {
@@ -308,10 +316,12 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
   }
 
   /// The revealed portion of the path (up to the current animation progress).
+  ///
+  /// Uses [_currentIconPosition] as the tip so the polyline end and the
+  /// transport icon marker are always at the exact same coordinates.
   List<LatLng> get _revealedPath {
     if (_routedPath.isEmpty || _progressAlongPath <= 0) return [];
     final idx = _progressAlongPath.floor();
-    final frac = _progressAlongPath - idx;
 
     // Full points up to idx
     final points = _routedPath.sublist(
@@ -319,16 +329,9 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       (idx + 1).clamp(0, _routedPath.length),
     );
 
-    // Add interpolated tip point for smooth drawing
-    if (frac > 0 && idx + 1 < _routedPath.length) {
-      final from = _routedPath[idx];
-      final to = _routedPath[idx + 1];
-      points.add(
-        LatLng(
-          from.latitude + (to.latitude - from.latitude) * frac,
-          from.longitude + (to.longitude - from.longitude) * frac,
-        ),
-      );
+    // Append the exact icon position as the polyline tip for perfect sync
+    if (_currentIconPosition != null) {
+      points.add(_currentIconPosition!);
     }
 
     return points;
@@ -352,6 +355,51 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
     return math.atan2(y, x);
   }
 
+  // ─── Camera helpers ──────────────────────────────────────────────
+
+  /// Fit the camera to show a broader view around the current position.
+  ///
+  /// Instead of centering directly on the transport icon, this shows a
+  /// padded bounding box that includes the current position plus nearby
+  /// route points, giving users context of the journey ahead and behind.
+  void _fitCameraToProgress(LatLng currentPosition) {
+    final contextPoints = <LatLng>[currentPosition];
+
+    // Include surrounding waypoints for geographic context
+    for (int i = 0; i < _waypointPathIndices.length; i++) {
+      final wpIdx = _waypointPathIndices[i];
+      final currentIdx = _progressAlongPath.floor();
+      if (wpIdx >= currentIdx - 1 && wpIdx <= currentIdx + 1) {
+        contextPoints.add(_waypoints[i]);
+      }
+    }
+
+    // Add a lookahead point on the routed path so the user sees where
+    // the transport icon is heading (5% of total path ahead)
+    final lookAheadIdx = (_progressAlongPath.floor() +
+            (_routedPath.length * 0.05).round())
+        .clamp(0, _routedPath.length - 1);
+    contextPoints.add(_routedPath[lookAheadIdx]);
+
+    if (contextPoints.length >= 2) {
+      try {
+        final bounds = LatLngBounds.fromPoints(contextPoints);
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(60),
+            maxZoom: 15,
+          ),
+        );
+      } catch (_) {
+        // Fallback if bounds computation fails
+        _mapController.move(currentPosition, _zoomLevel);
+      }
+    } else {
+      _mapController.move(currentPosition, _zoomLevel);
+    }
+  }
+
   // ─── Animation callbacks ────────────────────────────────────────
 
   void _onAnimationTick() {
@@ -364,10 +412,15 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
     }
 
     final distance = t * _totalRouteDistance;
+    // Compute position ONCE — used for polyline tip AND transport icon
     final position = _positionAtDistance(distance);
     final pathIdx = _pathIndexAtDistance(distance);
 
-    _mapController.move(position, _zoomLevel);
+    // Fix #3 & #4: Only move camera if follow mode is active.
+    // Uses fitCamera to show broader context instead of locking to the icon.
+    if (_cameraFollowMode) {
+      _fitCameraToProgress(position);
+    }
 
     // Determine which waypoint we've reached (for photo popups)
     int currentWaypointIdx = 0;
@@ -380,6 +433,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
     if (!mounted) return;
     setState(() {
       _progressAlongPath = pathIdx;
+      _currentIconPosition = position;
 
       if (currentWaypointIdx != _currentSegment) {
         _currentSegment = currentWaypointIdx;
@@ -396,8 +450,10 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       setState(() {
         _isPreviewPlaying = false;
         _currentPopupPhoto = null;
+        _cameraFollowMode = true;
         // Keep the full path revealed after animation completes
         _progressAlongPath = (_routedPath.length - 1).toDouble();
+        _currentIconPosition = null;
       });
     }
   }
@@ -415,6 +471,8 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       _currentSegment = 0;
       _currentPopupPhoto = null;
       _progressAlongPath = 0;
+      _currentIconPosition = null;
+      _cameraFollowMode = true; // re-enable follow at preview start
     });
 
     _mapController.move(_routedPath.first, _zoomLevel);
@@ -504,11 +562,13 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
             _currentSegment = currentWaypointIdx;
             _currentPopupPhoto = _geoPhotos[currentWaypointIdx];
             _progressAlongPath = pathIdx;
+            _currentIconPosition = position;
           });
         } else {
           if (!mounted) return;
           setState(() {
             _progressAlongPath = pathIdx;
+            _currentIconPosition = position;
           });
         }
 
@@ -567,6 +627,156 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
         XFile(_exportedFilePath!),
       ], text: 'My travel journey, created with Chronova');
     }
+  }
+
+  // ─── Waypoint reordering ────────────────────────────────────────
+
+  /// Shows a bottom sheet with a drag-to-reorder list of waypoints.
+  /// Users can rearrange photo waypoints before exporting.
+  void _showReorderSheet() {
+    // Work on a mutable copy so we can cancel without side effects
+    final reorderedPhotos = List<Photo>.from(_geoPhotos);
+
+    showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.6,
+              minChildSize: 0.3,
+              maxChildSize: 0.85,
+              builder: (ctx, scrollController) {
+                return Column(
+                  children: [
+                    // Handle bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Reorder Waypoints',
+                            style: AppTextStyles.subtitle1.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 4),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Apply'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        'Drag to reorder the stops in your journey',
+                        style: AppTextStyles.caption.copyWith(
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                    const Divider(),
+                    Expanded(
+                      child: ReorderableListView.builder(
+                        scrollController: scrollController,
+                        itemCount: reorderedPhotos.length,
+                        onReorder: (oldIdx, newIdx) {
+                          setSheetState(() {
+                            if (newIdx > oldIdx) newIdx--;
+                            final item = reorderedPhotos.removeAt(oldIdx);
+                            reorderedPhotos.insert(newIdx, item);
+                          });
+                        },
+                        itemBuilder: (ctx, i) {
+                          final photo = reorderedPhotos[i];
+                          return ListTile(
+                            key: ValueKey(photo.filePath),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(6),
+                              child: SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: Image.file(
+                                  File(photo.filePath),
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (_, __, ___) => Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Icons.photo_outlined,
+                                          size: 20,
+                                        ),
+                                      ),
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              photo.locationName ?? 'Stop ${i + 1}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.body2,
+                            ),
+                            subtitle:
+                                photo.dateTaken != null
+                                    ? Text(
+                                      photo.dateTaken!.formatted,
+                                      style: AppTextStyles.caption,
+                                    )
+                                    : null,
+                            trailing: ReorderableDragStartListener(
+                              index: i,
+                              child: const Icon(Icons.drag_handle_rounded),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    ).then((applied) {
+      if (applied == true) {
+        setState(() {
+          _geoPhotos = reorderedPhotos;
+          _waypoints =
+              reorderedPhotos
+                  .map((p) => LatLng(p.latitude!, p.longitude!))
+                  .toList();
+        });
+        // Re-fetch the route with the new waypoint order
+        _fetchRoute();
+      }
+    });
   }
 
   // ─── UI ──────────────────────────────────────────────────────
@@ -692,7 +902,20 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
             ),
             child: FlutterMap(
               mapController: _mapController,
-              options: MapOptions(initialCenter: bounds.center, initialZoom: 5),
+              options: MapOptions(
+                initialCenter: bounds.center,
+                initialZoom: 5,
+                // Fix #4: Allow all gestures (pinch-zoom, pan, etc.)
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all,
+                ),
+                // Detect user-initiated gestures to disable camera follow
+                onPositionChanged: (camera, hasGesture) {
+                  if (hasGesture && _isPreviewPlaying && _cameraFollowMode) {
+                    setState(() => _cameraFollowMode = false);
+                  }
+                },
+              ),
               children: [
                 TileLayer(
                   urlTemplate:
@@ -765,17 +988,15 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
                         );
                       }).toList(),
                 ),
-                // Transport icon (moving marker)
+                // Transport icon (moving marker) — uses the same
+                // _currentIconPosition as the polyline tip for perfect sync.
                 if ((_isPreviewPlaying || _isExporting) &&
-                    _routedPath.isNotEmpty &&
+                    _currentIconPosition != null &&
                     _progressAlongPath > 0)
                   MarkerLayer(
                     markers: [
                       Marker(
-                        point: _positionAtDistance(
-                          (_flyController.value * (_useEasing ? 1.0 : 1.0)) *
-                              _totalRouteDistance,
-                        ),
+                        point: _currentIconPosition!,
                         width: 40,
                         height: 40,
                         child: _TransportIcon(
@@ -848,17 +1069,36 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
             Positioned(
               top: 16,
               right: 16,
-              child: FloatingActionButton.small(
-                heroTag: 'preview_play',
-                onPressed:
-                    _isFetchingRoute
-                        ? null
-                        : (_isPreviewPlaying ? _stopPreview : _startPreview),
-                child: Icon(
-                  _isPreviewPlaying
-                      ? Icons.pause_rounded
-                      : Icons.play_arrow_rounded,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FloatingActionButton.small(
+                    heroTag: 'preview_play',
+                    onPressed:
+                        _isFetchingRoute
+                            ? null
+                            : (_isPreviewPlaying
+                                ? _stopPreview
+                                : _startPreview),
+                    child: Icon(
+                      _isPreviewPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+                  ),
+                  // Re-center button — shown when user has panned away
+                  if (_isPreviewPlaying && !_cameraFollowMode) ...[
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'recenter',
+                      onPressed: () {
+                        setState(() => _cameraFollowMode = true);
+                      },
+                      tooltip: 'Re-center on route',
+                      child: const Icon(Icons.my_location_rounded),
+                    ),
+                  ],
+                ],
               ),
             ),
 
@@ -952,6 +1192,20 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
             ),
           ),
           const SizedBox(height: 12),
+
+          // Waypoint reorder button
+          if (_geoPhotos.length >= 2 && !_isExporting && !_isPreviewPlaying)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: OutlinedButton.icon(
+                onPressed: _showReorderSheet,
+                icon: const Icon(Icons.reorder_rounded, size: 18),
+                label: Text('Reorder Waypoints (${_geoPhotos.length} stops)'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 40),
+                ),
+              ),
+            ),
 
           // Transport mode selector
           Row(

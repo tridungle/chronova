@@ -3,6 +3,37 @@ import 'photo.dart';
 /// Sentinel value used by copyWith to distinguish "not provided" from "null".
 const _absent = Object();
 
+/// A sub-group of photos within a single day, grouped by location name.
+///
+/// When multiple photos share the same date but different locations, each
+/// distinct location becomes a [LocationGroup]. Photos without a location
+/// are grouped under [unknownLabel].
+class LocationGroup {
+  /// Display label (location name or fallback).
+  final String label;
+
+  /// Photos at this location on this day.
+  final List<Photo> photos;
+
+  /// Whether this is a real location or the fallback "Unknown Location" group.
+  final bool isUnknown;
+
+  const LocationGroup({
+    required this.label,
+    required this.photos,
+    this.isUnknown = false,
+  });
+
+  /// Default label for photos without a location name.
+  static const String unknownLabel = 'Unknown Location';
+
+  /// The primary photo for this location group.
+  Photo? get primaryPhoto {
+    if (photos.isEmpty) return null;
+    return photos.firstWhere((p) => p.hasLocation, orElse: () => photos.first);
+  }
+}
+
 /// Represents a group of photos for a single day in the timeline.
 class TimelineDay {
   final DateTime date;
@@ -11,13 +42,26 @@ class TimelineDay {
   final String? mood;
   final List<Photo> photos;
 
+  /// Photos sub-grouped by location within this day.
+  /// Populated by the provider layer. If empty/null, the UI falls back to
+  /// showing all [photos] in a single group.
+  ///
+  /// Stored as nullable internally to survive hot-reload of stale instances
+  /// that were constructed before this field existed.
+  final List<LocationGroup>? _locationGroups;
+
+  /// Location groups, guaranteed non-null. Returns an empty list if the
+  /// field was never populated (e.g. stale hot-reload instance).
+  List<LocationGroup> get locationGroups => _locationGroups ?? const [];
+
   const TimelineDay({
     required this.date,
     this.locationName,
     this.note,
     this.mood,
     required this.photos,
-  });
+    List<LocationGroup>? locationGroups,
+  }) : _locationGroups = locationGroups;
 
   /// The primary photo for this day (first photo with location, or just first).
   /// Returns null only if [photos] is empty (should not happen in practice).
@@ -36,6 +80,46 @@ class TimelineDay {
           .map((p) => p.locationName!)
           .toSet()
           .toList();
+
+  /// Whether this day has multiple distinct locations (i.e. sub-groups matter).
+  bool get hasMultipleLocations => locationGroups.length > 1;
+
+  /// Build [LocationGroup]s from a flat list of photos.
+  ///
+  /// Groups photos by [Photo.locationName]. Photos without a location name
+  /// are placed under [LocationGroup.unknownLabel]. Groups are ordered:
+  /// named locations first (in the order they appear), then the unknown group.
+  static List<LocationGroup> groupByLocation(List<Photo> photos) {
+    final map = <String, List<Photo>>{};
+    for (final photo in photos) {
+      final key = photo.locationName ?? LocationGroup.unknownLabel;
+      map.putIfAbsent(key, () => []).add(photo);
+    }
+
+    final groups = <LocationGroup>[];
+    LocationGroup? unknownGroup;
+
+    for (final entry in map.entries) {
+      final isUnknown = entry.key == LocationGroup.unknownLabel;
+      final group = LocationGroup(
+        label: entry.key,
+        photos: entry.value,
+        isUnknown: isUnknown,
+      );
+      if (isUnknown) {
+        unknownGroup = group;
+      } else {
+        groups.add(group);
+      }
+    }
+
+    // Unknown group goes last
+    if (unknownGroup != null) {
+      groups.add(unknownGroup);
+    }
+
+    return groups;
+  }
 }
 
 /// Represents a journal entry (can be standalone or tied to a photo/day).

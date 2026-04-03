@@ -256,8 +256,42 @@ class _HorizontalDayCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // Location badge
-                        if (day.locationName != null)
+                        // Location badge(s)
+                        if (day.hasMultipleLocations)
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.explore_rounded,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${day.locationGroups.length} locations',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else if (day.locationName != null)
                           Positioned(
                             bottom: 12,
                             left: 12,
@@ -320,59 +354,13 @@ class _HorizontalDayCard extends StatelessWidget {
                   ),
                 ),
 
-                // Bottom photo strip (thumbnails)
-                if (day.photos.length > 1)
-                  SizedBox(
-                    height: 60,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      itemCount: day.photos.length.clamp(0, 8),
-                      itemBuilder: (context, i) {
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (_) => PhotoDetailScreen(
-                                      photos: List.from(day.photos),
-                                      initialIndex: i,
-                                    ),
-                              ),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: Hero(
-                              tag:
-                                  i == 0
-                                      // Avoid duplicate Hero tag with the main photo
-                                      ? 'thumb_${day.photos[i].id}'
-                                      : 'photo_${day.photos[i].id}',
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: SizedBox(
-                                  width: 44,
-                                  height: 44,
-                                  child: Image.file(
-                                    File(day.photos[i].filePath),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (_, __, ___) =>
-                                            Container(color: Colors.grey[300]),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                // Location sub-groups with thumbnails — shown when
+                // there are multiple locations on this day
+                if (day.hasMultipleLocations)
+                  ..._buildLocationThumbnailSections(context, colorScheme)
+                else if (day.photos.length > 1)
+                  // Single-location thumbnail strip (original)
+                  _buildThumbnailStrip(day.photos),
 
                 // Info section
                 Padding(
@@ -420,5 +408,160 @@ class _HorizontalDayCard extends StatelessWidget {
         .animate()
         .fadeIn(duration: 500.ms)
         .scale(begin: const Offset(0.95, 0.95), duration: 500.ms);
+  }
+
+  /// Build a simple horizontal thumbnail strip for a single-location day.
+  Widget _buildThumbnailStrip(List<Photo> photos) {
+    return SizedBox(
+      height: 60,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: photos.length.clamp(0, 8),
+        itemBuilder: (context, i) {
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (_) => PhotoDetailScreen(
+                        photos: List.from(photos),
+                        initialIndex: i,
+                      ),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Hero(
+                tag: i == 0 ? 'thumb_${photos[i].id}' : 'photo_${photos[i].id}',
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: Image.file(
+                      File(photos[i].filePath),
+                      fit: BoxFit.cover,
+                      errorBuilder:
+                          (_, __, ___) => Container(color: Colors.grey[300]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Build location-labeled thumbnail sections for multi-location days.
+  ///
+  /// Each location group gets a small label followed by its thumbnails.
+  List<Widget> _buildLocationThumbnailSections(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
+    final sections = <Widget>[];
+
+    for (final group in day.locationGroups) {
+      if (group.photos.isEmpty) continue;
+
+      sections.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+          child: Row(
+            children: [
+              Icon(
+                group.isUnknown
+                    ? Icons.location_off_rounded
+                    : Icons.location_on_rounded,
+                size: 12,
+                color: group.isUnknown ? Colors.grey[400] : colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  group.label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        group.isUnknown
+                            ? Colors.grey[400]
+                            : colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Text(
+                '${group.photos.length}',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      sections.add(
+        SizedBox(
+          height: 52,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            itemCount: group.photos.length.clamp(0, 8),
+            itemBuilder: (ctx, i) {
+              final photo = group.photos[i];
+              // Determine photo index in the full day's photo list for
+              // correct navigation in PhotoDetailScreen
+              final dayIndex = day.photos
+                  .indexOf(photo)
+                  .clamp(0, day.photos.length - 1);
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => PhotoDetailScreen(
+                            photos: List.from(day.photos),
+                            initialIndex: dayIndex,
+                          ),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 5),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Image.file(
+                        File(photo.filePath),
+                        fit: BoxFit.cover,
+                        errorBuilder:
+                            (_, __, ___) => Container(color: Colors.grey[300]),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    return sections;
   }
 }

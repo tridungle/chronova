@@ -1,5 +1,38 @@
 # Changelog
 
+## Session 7 — 2026-04-03 (Video Export Bug Fixes & Timeline Location Sub-grouping)
+
+### Fixed
+
+- **Fix #1: Polyline tip / transport icon desync** — Transport icon and polyline tip were computed independently, causing the icon to visually detach from the path end. Added `_currentIconPosition` state field as single source of truth — `_onAnimationTick()` computes position once via `_positionAtDistance()` and both `_revealedPath` and the icon `Marker` reference it. Removed redundant `(_useEasing ? 1.0 : 1.0)` expression.
+- **Fix #3: Camera too zoomed in** — `_mapController.move(position, _zoomLevel)` locked camera directly on the icon with fixed zoom. Replaced with `_fitCameraToProgress()` that builds a bounding box from the current position + nearby waypoints + 5% lookahead, using `_mapController.fitCamera(CameraFit.bounds(...))` with 60px padding and maxZoom 15 for contextual framing.
+- **Fix #4: Cannot pan/zoom during preview** — `_onAnimationTick()` called `_mapController.move()` every frame, overriding all user gestures. Added `_cameraFollowMode` flag; camera updates only when follow mode is active. `MapOptions.onPositionChanged` detects `hasGesture == true` and disables follow. A re-center FAB (`Icons.my_location_rounded`) appears when follow mode is off.
+
+### Added
+
+- **Waypoint reorder sheet** (Fix #2) — `_showReorderSheet()` presents a `DraggableScrollableSheet` with `ReorderableListView` showing photo thumbnails, location names, and dates. Users can drag-to-reorder stops, then Apply (re-fetches route) or Cancel. Accessible via "Reorder Waypoints" button in settings panel.
+- **Timeline location sub-grouping** — Photos within the same day but at different locations are now visually separated into sub-groups in both vertical and horizontal timeline views:
+  - `LocationGroup` class (`timeline_day.dart`) with `label`, `photos`, `isUnknown`, `primaryPhoto`
+  - `TimelineDay.groupByLocation()` static method groups photos by `locationName` (or "Unknown Location" fallback)
+  - `locationGroups` field on `TimelineDay` (nullable private `_locationGroups` with null-safe getter for hot-reload safety)
+  - `hasMultipleLocations` getter
+  - Vertical timeline: location pin headers + per-group photo sections with dividers
+  - Horizontal timeline: "N locations" badge on hero photo + location-labeled thumbnail sections
+- 12 new tests for `LocationGroup`, `groupByLocation()`, `hasMultipleLocations`, and edge cases (all photos same location, mixed locations, no location name, single photo)
+
+### Changed
+
+- Both `timelineDaysProvider` and `tripTimelineDaysProvider` now call `TimelineDay.groupByLocation(photos)` and pass the result when constructing `TimelineDay` instances.
+- Vertical timeline `_DayCard` refactored: extracted `_buildInfoSection()` and `_buildLocationSubGroups()` methods.
+- Horizontal timeline `_HorizontalDayCard` refactored: extracted `_buildThumbnailStrip()` and `_buildLocationThumbnailSections()` methods.
+
+### Tests
+
+- Added 12 new unit tests for timeline location sub-grouping.
+- Total tests: **105** (up from 93).
+
+---
+
 ## Session 6 — 2026-04-03 (Video Export Routing Enhancement)
 
 ### Added

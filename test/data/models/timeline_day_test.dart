@@ -108,6 +108,139 @@ void main() {
         expect(day.locations, isEmpty);
       });
     });
+
+    group('hasMultipleLocations', () {
+      test('returns true when locationGroups has 2+ entries', () {
+        final day = TimelineDay(
+          date: now,
+          photos: [makePhoto(id: 'p1')],
+          locationGroups: [
+            LocationGroup(
+              label: 'Tokyo',
+              photos: [makePhoto(id: 'p1', locationName: 'Tokyo')],
+            ),
+            LocationGroup(
+              label: 'Osaka',
+              photos: [makePhoto(id: 'p2', locationName: 'Osaka')],
+            ),
+          ],
+        );
+        expect(day.hasMultipleLocations, isTrue);
+      });
+
+      test('returns false when locationGroups has 0 or 1 entry', () {
+        final day = TimelineDay(date: now, photos: [makePhoto(id: 'p1')]);
+        expect(day.hasMultipleLocations, isFalse);
+
+        final day2 = TimelineDay(
+          date: now,
+          photos: [makePhoto(id: 'p1')],
+          locationGroups: [
+            LocationGroup(
+              label: 'Tokyo',
+              photos: [makePhoto(id: 'p1', locationName: 'Tokyo')],
+            ),
+          ],
+        );
+        expect(day2.hasMultipleLocations, isFalse);
+      });
+    });
+
+    group('groupByLocation', () {
+      test('groups photos by locationName', () {
+        final photos = [
+          makePhoto(id: 'p1', locationName: 'Tokyo'),
+          makePhoto(id: 'p2', locationName: 'Osaka'),
+          makePhoto(id: 'p3', locationName: 'Tokyo'),
+        ];
+        final groups = TimelineDay.groupByLocation(photos);
+        expect(groups.length, 2);
+        expect(groups[0].label, 'Tokyo');
+        expect(groups[0].photos.length, 2);
+        expect(groups[1].label, 'Osaka');
+        expect(groups[1].photos.length, 1);
+      });
+
+      test('puts unknown-location photos in a separate group at the end', () {
+        final photos = [
+          makePhoto(id: 'p1', locationName: 'Tokyo'),
+          makePhoto(id: 'p2'), // no location
+          makePhoto(id: 'p3', locationName: 'Tokyo'),
+          makePhoto(id: 'p4'), // no location
+        ];
+        final groups = TimelineDay.groupByLocation(photos);
+        expect(groups.length, 2);
+        expect(groups[0].label, 'Tokyo');
+        expect(groups[0].isUnknown, isFalse);
+        expect(groups[1].label, LocationGroup.unknownLabel);
+        expect(groups[1].isUnknown, isTrue);
+        expect(groups[1].photos.length, 2);
+      });
+
+      test('returns single group when all photos have same location', () {
+        final photos = [
+          makePhoto(id: 'p1', locationName: 'Paris'),
+          makePhoto(id: 'p2', locationName: 'Paris'),
+        ];
+        final groups = TimelineDay.groupByLocation(photos);
+        expect(groups.length, 1);
+        expect(groups[0].label, 'Paris');
+      });
+
+      test('returns single unknown group when no photos have locations', () {
+        final photos = [makePhoto(id: 'p1'), makePhoto(id: 'p2')];
+        final groups = TimelineDay.groupByLocation(photos);
+        expect(groups.length, 1);
+        expect(groups[0].isUnknown, isTrue);
+      });
+
+      test('returns empty list for empty input', () {
+        final groups = TimelineDay.groupByLocation([]);
+        expect(groups, isEmpty);
+      });
+
+      test('handles many distinct locations', () {
+        final photos = [
+          makePhoto(id: 'p1', locationName: 'A'),
+          makePhoto(id: 'p2', locationName: 'B'),
+          makePhoto(id: 'p3', locationName: 'C'),
+          makePhoto(id: 'p4'), // unknown
+        ];
+        final groups = TimelineDay.groupByLocation(photos);
+        expect(groups.length, 4);
+        // Named locations first, unknown last
+        expect(groups[0].label, 'A');
+        expect(groups[1].label, 'B');
+        expect(groups[2].label, 'C');
+        expect(groups[3].isUnknown, isTrue);
+      });
+    });
+  });
+
+  group('LocationGroup', () {
+    test('primaryPhoto returns first photo with location', () {
+      final photos = [
+        makePhoto(id: 'p1'),
+        makePhoto(id: 'p2', latitude: 35.0, longitude: 139.0),
+      ];
+      final group = LocationGroup(label: 'Test', photos: photos);
+      expect(group.primaryPhoto?.id, 'p2');
+    });
+
+    test('primaryPhoto returns first photo when none have location', () {
+      final photos = [makePhoto(id: 'p1'), makePhoto(id: 'p2')];
+      final group = LocationGroup(label: 'Test', photos: photos);
+      expect(group.primaryPhoto?.id, 'p1');
+    });
+
+    test('primaryPhoto returns null for empty list', () {
+      final group = LocationGroup(label: 'Test', photos: []);
+      expect(group.primaryPhoto, isNull);
+    });
+
+    test('unknownLabel is "Unknown Location"', () {
+      expect(LocationGroup.unknownLabel, 'Unknown Location');
+    });
   });
 
   group('JournalEntry', () {

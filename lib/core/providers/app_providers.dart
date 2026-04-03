@@ -107,6 +107,9 @@ final timelineDaysProvider = FutureProvider<List<TimelineDay>>((ref) async {
       orElse: () => photos.first,
     );
 
+    // Build location sub-groups within this day
+    final locationGroups = TimelineDay.groupByLocation(photos);
+
     days.add(
       TimelineDay(
         date: DateTime.tryParse(dateKey) ?? DateTime.now(),
@@ -114,6 +117,7 @@ final timelineDaysProvider = FutureProvider<List<TimelineDay>>((ref) async {
         note: photos.first.note,
         mood: photos.first.mood,
         photos: photos,
+        locationGroups: locationGroups,
       ),
     );
   }
@@ -144,6 +148,9 @@ final tripTimelineDaysProvider =
           orElse: () => datePhotos.first,
         );
 
+        // Build location sub-groups within this day
+        final locationGroups = TimelineDay.groupByLocation(datePhotos);
+
         days.add(
           TimelineDay(
             date: DateTime.tryParse(entry.key) ?? DateTime.now(),
@@ -151,6 +158,7 @@ final tripTimelineDaysProvider =
             note: datePhotos.first.note,
             mood: datePhotos.first.mood,
             photos: datePhotos,
+            locationGroups: locationGroups,
           ),
         );
       }
