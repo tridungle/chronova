@@ -165,7 +165,12 @@ class _DayCard extends StatelessWidget {
           if (day.photos.length == 1)
             _SinglePhoto(photo: primaryPhoto, allPhotos: day.photos)
           else
-            _PhotoCollage(photos: day.photos),
+            _PhotoCollage(
+              photos: day.photos,
+              // Use a different Hero prefix on multi-location days to avoid
+              // clashing with the per-group thumbnail Hero tags below.
+              heroTagPrefix: day.hasMultipleLocations ? 'collage' : 'photo',
+            ),
 
           // If there are multiple locations, show sub-groups below collage
           if (day.hasMultipleLocations)
@@ -456,7 +461,11 @@ class _SinglePhoto extends StatelessWidget {
 class _PhotoCollage extends StatelessWidget {
   final List<Photo> photos;
 
-  const _PhotoCollage({required this.photos});
+  /// Prefix for Hero tags. Use `'collage'` on multi-location days to avoid
+  /// clashing with per-group thumbnail heroes that use `'photo'`.
+  final String heroTagPrefix;
+
+  const _PhotoCollage({required this.photos, this.heroTagPrefix = 'photo'});
 
   @override
   Widget build(BuildContext context) {
@@ -566,7 +575,7 @@ class _PhotoCollage extends StatelessWidget {
               );
             },
             child: Hero(
-              tag: 'photo_${photo.id}',
+              tag: '${heroTagPrefix}_${photo.id}',
               child: SizedBox.expand(
                 child: Image.file(
                   File(photo.filePath),

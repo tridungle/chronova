@@ -1,5 +1,14 @@
 # Changelog
 
+## Session 10 — 2026-04-03 (DB Migration & Hero Tag Bug Fixes)
+
+### Fixed
+
+- **DB migration not running on existing installs** — Added `onOpen` safety callback to `AppDatabase` that checks for `file_hash` column via `PRAGMA table_info(photos)` and adds it if missing. Handles cases where `_onUpgrade` was skipped (e.g. hot restart with cached singleton). Also made `_onUpgrade` itself defensive with `CREATE INDEX IF NOT EXISTS`.
+- **Hero tag conflict on multi-location days** — In `vertical_timeline.dart`, the `_PhotoCollage` and location sub-group thumbnail strips both used `Hero(tag: 'photo_${photo.id}')` for the same photos, causing a Flutter assertion error. Fixed by adding `heroTagPrefix` parameter to `_PhotoCollage` — uses `'collage'` prefix on multi-location days, `'photo'` on single-location days.
+
+---
+
 ## Session 9 — 2026-04-03 (Duplicate Photo Detection on Import)
 
 ### Added

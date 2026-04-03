@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
@@ -44,7 +45,26 @@ class AppDatabase {
       version: AppConstants.dbVersion,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      onOpen: _onOpen,
     );
+  }
+
+  /// Safety net: ensure all expected columns exist even if _onUpgrade was
+  /// skipped (e.g. hot restart with a cached singleton holding version 1).
+  Future<void> _onOpen(Database db) async {
+    try {
+      final columns = await db.rawQuery('PRAGMA table_info(photos)');
+      final hasFileHash = columns.any((c) => c['name'] == 'file_hash');
+      if (!hasFileHash) {
+        await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+        );
+        debugPrint('AppDatabase: backfilled file_hash column via onOpen');
+      }
+    } catch (e) {
+      debugPrint('AppDatabase: onOpen safety check failed: $e');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -124,11 +144,16 @@ class AppDatabase {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Add file_hash column for duplicate detection (SHA-256 of file content)
-      await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
-      await db.execute(
-        'CREATE INDEX idx_photos_file_hash ON photos(file_hash)',
-      );
+      // Add file_hash column for duplicate detection (SHA-256 of file content).
+      // Check if column already exists (defensive — handles partial migrations).
+      final columns = await db.rawQuery('PRAGMA table_info(photos)');
+      final hasFileHash = columns.any((c) => c['name'] == 'file_hash');
+      if (!hasFileHash) {
+        await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+        );
+      }
     }
   }
 
