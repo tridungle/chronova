@@ -74,9 +74,17 @@ class AppDatabase {
       if (!columnNames.contains('file_hash')) {
         await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
         await db.execute(
-          'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_file_hash_unique '
+          'ON photos(file_hash) WHERE file_hash IS NOT NULL',
         );
         debugPrint('AppDatabase: added file_hash column via _ensureSchema');
+      } else {
+        // Ensure the unique index exists even if column was added previously
+        // with a non-unique index. The old index is harmless alongside this.
+        await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_file_hash_unique '
+          'ON photos(file_hash) WHERE file_hash IS NOT NULL',
+        );
       }
 
       // Migrate absolute file_path values to relative paths.
@@ -144,9 +152,16 @@ class AppDatabase {
       if (!hasFileHash) {
         await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
         await db.execute(
-          'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_file_hash_unique '
+          'ON photos(file_hash) WHERE file_hash IS NOT NULL',
         );
         debugPrint('AppDatabase: backfilled file_hash column via onOpen');
+      } else {
+        // Ensure unique index exists for existing installs
+        await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_file_hash_unique '
+          'ON photos(file_hash) WHERE file_hash IS NOT NULL',
+        );
       }
     } catch (e) {
       debugPrint('AppDatabase: onOpen safety check failed: $e');
@@ -223,6 +238,10 @@ class AppDatabase {
     );
     await db.execute('CREATE INDEX idx_photos_file_hash ON photos(file_hash)');
     await db.execute(
+      'CREATE UNIQUE INDEX idx_photos_file_hash_unique '
+      'ON photos(file_hash) WHERE file_hash IS NOT NULL',
+    );
+    await db.execute(
       'CREATE INDEX idx_journal_trip_id ON journal_entries(trip_id)',
     );
     await db.execute('CREATE INDEX idx_journal_date ON journal_entries(date)');
@@ -238,6 +257,10 @@ class AppDatabase {
         await db.execute('ALTER TABLE photos ADD COLUMN file_hash TEXT');
         await db.execute(
           'CREATE INDEX IF NOT EXISTS idx_photos_file_hash ON photos(file_hash)',
+        );
+        await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_file_hash_unique '
+          'ON photos(file_hash) WHERE file_hash IS NOT NULL',
         );
       }
     }

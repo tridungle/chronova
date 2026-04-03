@@ -1,5 +1,22 @@
 # Changelog
 
+## Session 13 — 2026-04-03 (Duplicate Photos & Stale UI Bug Fixes)
+
+### Fixed
+
+- **Photos appear duplicated on multi-location days** — On days with multiple locations, the vertical timeline rendered a full-day photo collage (showing ALL photos) AND then per-location thumbnail strips (showing the same photos again), causing every photo to appear twice. Fixed by skipping the full-day collage on multi-location days — only location sub-groups (each with their own thumbnail strip) are shown. Single-location days still show the collage as before.
+- **Deleting a photo does not update UI until pull-to-refresh** — After deleting a photo, `photo_detail_screen.dart` only invalidated `allPhotosProvider`, `timelineDaysProvider`, `geoPhotosProvider`, and `tripsProvider`. Missing invalidations for `photoCountProvider`, `journalEntriesProvider`, and trip-specific providers (`tripPhotosProvider`, `tripTimelineDaysProvider`, `tripPhotoCountProvider`). Added all missing invalidations, conditional on whether the deleted photo belonged to a trip.
+- **Updating a note/mood does not update UI until pull-to-refresh** — After saving a journal note, `journal_editor.dart` only invalidated `allPhotosProvider`, `timelineDaysProvider`, and `journalEntriesProvider`. Missing invalidations for trip-specific providers (`tripPhotosProvider`, `tripTimelineDaysProvider`, `tripJournalEntriesProvider`). Added conditional invalidations when `widget.tripId` is non-null.
+- **Photo detail overlay shows stale note/mood after journal edit** — `_openJournal()` was fire-and-forget, so the local `_photos` list in `PhotoDetailScreen` still held old `Photo` objects after the journal editor saved. Changed `_openJournal()` to `async`, awaits the bottom sheet, then reloads the current photo from DB via `PhotoRepository.getById()` and calls `setState` to update the local list.
+- **No UNIQUE constraint on `file_hash` allowing DB-level duplicates** — The `file_hash` column had a non-unique index, so if the dedup check failed for any reason (column missing, race condition, null hashes from pre-hash imports), duplicate rows could be inserted with different UUIDs. Added `CREATE UNIQUE INDEX ... ON photos(file_hash) WHERE file_hash IS NOT NULL` in `_onCreate`, `_onUpgrade`, `_onOpen`, and `_ensureSchema`.
+
+### Changed
+
+- **Vertical timeline multi-location layout** — Removed full-day collage for multi-location days. Layout is now: date header -> location sub-groups (each with label, mood, thumbnail strip, note). Eliminated `heroTagPrefix` parameter from `_PhotoCollage` (no longer needed since collage and sub-groups never coexist).
+- **`_PhotoCollage` simplified** — Removed `heroTagPrefix` parameter; always uses `'photo'` prefix since it's only rendered on single-location days now.
+
+---
+
 ## Session 12 — 2026-04-03 (Trip Import Fix, Assign Photos & Photo Path Resolution)
 
 ### Fixed

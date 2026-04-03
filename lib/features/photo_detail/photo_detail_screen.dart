@@ -90,6 +90,16 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
     ref.invalidate(timelineDaysProvider);
     ref.invalidate(geoPhotosProvider);
     ref.invalidate(tripsProvider);
+    ref.invalidate(photoCountProvider);
+    ref.invalidate(journalEntriesProvider);
+
+    // Invalidate trip-specific providers if the photo belonged to a trip
+    final deletedTripId = _currentPhoto.tripId;
+    if (deletedTripId != null) {
+      ref.invalidate(tripPhotosProvider(deletedTripId));
+      ref.invalidate(tripTimelineDaysProvider(deletedTripId));
+      ref.invalidate(tripPhotoCountProvider(deletedTripId));
+    }
 
     if (!mounted) return;
 
@@ -122,13 +132,25 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
     );
   }
 
-  void _openJournal() {
-    JournalEditor.show(
+  Future<void> _openJournal() async {
+    await JournalEditor.show(
       context,
       photo: _currentPhoto,
       tripId: _currentPhoto.tripId,
       date: _currentPhoto.dateTaken ?? DateTime.now(),
     );
+
+    // Refresh the local photo object from DB so the overlay shows updated
+    // note/mood/tags without requiring a manual back+re-enter.
+    if (!mounted) return;
+    final refreshed = await ref
+        .read(photoRepositoryProvider)
+        .getById(_currentPhoto.id);
+    if (refreshed != null && mounted) {
+      setState(() {
+        _photos[_currentIndex] = refreshed;
+      });
+    }
   }
 
   @override

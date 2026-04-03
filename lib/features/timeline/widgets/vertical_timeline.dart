@@ -127,8 +127,8 @@ class _TimelineItem extends StatelessWidget {
 ///
 /// Layout for multi-location days:
 ///   - Date + total photo count header
-///   - Full-day photo collage (all photos)
 ///   - Location sub-groups, each with: label + mood, thumbnail strip, note
+///   (No full-day collage — avoids visual duplication)
 ///
 /// Layout for single-location days:
 ///   - Date + mood + photo count + location
@@ -161,18 +161,18 @@ class _DayCard extends StatelessWidget {
             showLocation: !day.hasMultipleLocations,
           ),
 
-          // Full-day photo collage — shows ALL photos
-          if (day.photos.length == 1)
-            _SinglePhoto(photo: primaryPhoto, allPhotos: day.photos)
-          else
-            _PhotoCollage(
-              photos: day.photos,
-              // Use a different Hero prefix on multi-location days to avoid
-              // clashing with the per-group thumbnail Hero tags below.
-              heroTagPrefix: day.hasMultipleLocations ? 'collage' : 'photo',
-            ),
+          // Multi-location days: skip the full-day collage to avoid showing
+          // the same photos twice (once in collage, again in sub-groups).
+          // Single-location days: show the collage as usual.
+          if (!day.hasMultipleLocations) ...[
+            if (day.photos.length == 1)
+              _SinglePhoto(photo: primaryPhoto, allPhotos: day.photos)
+            else
+              _PhotoCollage(photos: day.photos),
+          ],
 
-          // If there are multiple locations, show sub-groups below collage
+          // If there are multiple locations, show sub-groups (each with
+          // its own thumbnail strip) instead of a single combined collage.
           if (day.hasMultipleLocations)
             ..._buildLocationSubGroups(context, colorScheme, isDark)
           else if (day.note != null && day.note!.isNotEmpty)
@@ -461,11 +461,7 @@ class _SinglePhoto extends StatelessWidget {
 class _PhotoCollage extends StatelessWidget {
   final List<Photo> photos;
 
-  /// Prefix for Hero tags. Use `'collage'` on multi-location days to avoid
-  /// clashing with per-group thumbnail heroes that use `'photo'`.
-  final String heroTagPrefix;
-
-  const _PhotoCollage({required this.photos, this.heroTagPrefix = 'photo'});
+  const _PhotoCollage({required this.photos});
 
   @override
   Widget build(BuildContext context) {
@@ -575,7 +571,7 @@ class _PhotoCollage extends StatelessWidget {
               );
             },
             child: Hero(
-              tag: '${heroTagPrefix}_${photo.id}',
+              tag: 'photo_${photo.id}',
               child: SizedBox.expand(
                 child: Image.file(
                   File(photo.resolvedFilePath),

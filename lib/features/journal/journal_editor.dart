@@ -252,6 +252,13 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
       ref.invalidate(timelineDaysProvider);
       ref.invalidate(journalEntriesProvider);
 
+      // Invalidate trip-specific providers if the photo belongs to a trip
+      if (widget.tripId != null) {
+        ref.invalidate(tripPhotosProvider(widget.tripId!));
+        ref.invalidate(tripTimelineDaysProvider(widget.tripId!));
+        ref.invalidate(tripJournalEntriesProvider(widget.tripId!));
+      }
+
       HapticFeedback.lightImpact();
       if (mounted) Navigator.pop(context);
     } catch (e) {
