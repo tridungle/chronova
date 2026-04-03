@@ -23,7 +23,12 @@
 
 ### Note
 
-- Existing photos in the database that were imported before this fix will have null `dateTaken`. Users should re-import their photos to populate date/time data correctly.
+- Existing photos in the database that were imported before this fix will have null `dateTaken`. Use **Settings > Re-scan EXIF Data** to refresh metadata for all existing photos without re-importing.
+
+### Added
+
+- **Re-scan EXIF Data** feature in Settings — re-reads EXIF metadata (date, GPS, camera) from all photo files and updates the database. Shows progress bar and summary (updated/skipped/errors). Automatically refreshes all providers on completion.
+- `PhotoRepository.updateExifFields()` — targeted update of EXIF-related columns for a single photo.
 
 ---
 

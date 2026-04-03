@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,17 @@ import '../../core/theme/app_text_styles.dart';
 /// App settings screen with theme toggle and other options.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  /// Shows a dialog to re-scan EXIF data for all photos.
+  void _showRescanDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return _RescanExifDialog(ref: ref);
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -182,6 +195,35 @@ class SettingsScreen extends ConsumerWidget {
 
           const SizedBox(height: 24),
 
+          // Data management section
+          Text(
+            'Data Management',
+            style: AppTextStyles.label.copyWith(
+              color: Colors.grey[500],
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.refresh_rounded),
+                  title: const Text('Re-scan EXIF Data'),
+                  subtitle: const Text('Re-read metadata from all photo files'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    HapticFeedback.mediumImpact();
+                    _showRescanDialog(context, ref);
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
           // About section
           Text(
             'About',
@@ -311,6 +353,223 @@ class _StatItem extends StatelessWidget {
           Text(label, style: AppTextStyles.caption),
         ],
       ),
+    );
+  }
+}
+
+/// Dialog that re-scans EXIF data from all photo files and updates the DB.
+class _RescanExifDialog extends StatefulWidget {
+  final WidgetRef ref;
+
+  const _RescanExifDialog({required this.ref});
+
+  @override
+  State<_RescanExifDialog> createState() => _RescanExifDialogState();
+}
+
+class _RescanExifDialogState extends State<_RescanExifDialog> {
+  bool _isRunning = false;
+  bool _isDone = false;
+  int _current = 0;
+  int _total = 0;
+  int _updated = 0;
+  int _skipped = 0;
+  int _errors = 0;
+  String _statusText = '';
+
+  Future<void> _runRescan() async {
+    setState(() {
+      _isRunning = true;
+      _statusText = 'Loading photos...';
+    });
+
+    final photoRepo = widget.ref.read(photoRepositoryProvider);
+    final exifService = widget.ref.read(exifServiceProvider);
+    final allPhotos = await photoRepo.getAll();
+
+    setState(() {
+      _total = allPhotos.length;
+      _statusText = 'Scanning 0 / $_total...';
+    });
+
+    for (int i = 0; i < allPhotos.length; i++) {
+      if (!mounted) return;
+
+      final photo = allPhotos[i];
+      setState(() {
+        _current = i + 1;
+        _statusText = 'Scanning $_current / $_total...';
+      });
+
+      try {
+        // Check if file still exists
+        final file = File(photo.filePath);
+        if (!await file.exists()) {
+          _skipped++;
+          continue;
+        }
+
+        final exif = await exifService.extractFromFile(photo.filePath);
+
+        // Only update if EXIF had useful data
+        if (exif.hasDate || exif.hasLocation || exif.cameraModel != null) {
+          await photoRepo.updateExifFields(
+            photo.id,
+            dateTaken: exif.dateTaken,
+            latitude: exif.latitude,
+            longitude: exif.longitude,
+            altitude: exif.altitude,
+            cameraModel: exif.cameraModel,
+            width: exif.width,
+            height: exif.height,
+          );
+          _updated++;
+        } else {
+          _skipped++;
+        }
+      } catch (e) {
+        _errors++;
+      }
+    }
+
+    if (!mounted) return;
+
+    // Invalidate providers so UI refreshes with new data
+    widget.ref.invalidate(allPhotosProvider);
+    widget.ref.invalidate(geoPhotosProvider);
+    widget.ref.invalidate(timelineDaysProvider);
+    widget.ref.invalidate(photoCountProvider);
+
+    setState(() {
+      _isRunning = false;
+      _isDone = true;
+      _statusText =
+          'Done! Updated $_updated, '
+          'skipped $_skipped, '
+          'errors $_errors.';
+    });
+
+    HapticFeedback.mediumImpact();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          Icon(
+            _isDone ? Icons.check_circle_rounded : Icons.refresh_rounded,
+            color: _isDone ? Colors.green : colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Text(_isDone ? 'Scan Complete' : 'Re-scan EXIF Data'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!_isRunning && !_isDone)
+            const Text(
+              'This will re-read EXIF metadata (date, GPS, camera) from all '
+              'photo files and update the database.\n\n'
+              'This is useful if photos were imported before a bug fix '
+              'that affected EXIF parsing.',
+            ),
+          if (_isRunning || _isDone) ...[
+            if (_isRunning && _total > 0)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: _total > 0 ? _current / _total : null,
+                  minHeight: 8,
+                ),
+              ),
+            if (_isRunning && _total == 0)
+              const LinearProgressIndicator(minHeight: 8),
+            const SizedBox(height: 16),
+            Text(
+              _statusText,
+              style: AppTextStyles.body2.copyWith(color: Colors.grey[600]),
+            ),
+            if (_isDone) ...[
+              const SizedBox(height: 12),
+              _RescanStat(
+                icon: Icons.update_rounded,
+                label: 'Updated',
+                value: _updated,
+                color: Colors.green,
+              ),
+              const SizedBox(height: 4),
+              _RescanStat(
+                icon: Icons.skip_next_rounded,
+                label: 'Skipped (no new data)',
+                value: _skipped,
+                color: Colors.orange,
+              ),
+              if (_errors > 0) ...[
+                const SizedBox(height: 4),
+                _RescanStat(
+                  icon: Icons.error_outline_rounded,
+                  label: 'Errors',
+                  value: _errors,
+                  color: Colors.red,
+                ),
+              ],
+            ],
+          ],
+        ],
+      ),
+      actions: [
+        if (!_isRunning && !_isDone)
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        if (!_isRunning && !_isDone)
+          FilledButton.icon(
+            onPressed: _runRescan,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Start Scan'),
+          ),
+        if (_isDone)
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+      ],
+    );
+  }
+}
+
+class _RescanStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int value;
+  final Color color;
+
+  const _RescanStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 8),
+        Text(
+          '$value',
+          style: TextStyle(fontWeight: FontWeight.w600, color: color),
+        ),
+        const SizedBox(width: 6),
+        Expanded(child: Text(label, style: AppTextStyles.caption)),
+      ],
     );
   }
 }

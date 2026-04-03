@@ -191,4 +191,35 @@ class PhotoRepository {
     }
     await batch.commit(noResult: true);
   }
+
+  /// Update EXIF metadata fields for a single photo.
+  /// Used by the re-scan EXIF feature to refresh metadata from files.
+  Future<void> updateExifFields(
+    String id, {
+    DateTime? dateTaken,
+    double? latitude,
+    double? longitude,
+    double? altitude,
+    String? cameraModel,
+    int? width,
+    int? height,
+  }) async {
+    final db = await _database;
+    final fields = <String, dynamic>{
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+    // Only update fields that have values (don't overwrite existing non-null
+    // data with null unless the EXIF truly had nothing).
+    if (dateTaken != null) {
+      fields['date_taken'] = dateTaken.toIso8601String();
+    }
+    if (latitude != null) fields['latitude'] = latitude;
+    if (longitude != null) fields['longitude'] = longitude;
+    if (altitude != null) fields['altitude'] = altitude;
+    if (cameraModel != null) fields['camera_model'] = cameraModel;
+    if (width != null) fields['width'] = width;
+    if (height != null) fields['height'] = height;
+
+    await db.update('photos', fields, where: 'id = ?', whereArgs: [id]);
+  }
 }
