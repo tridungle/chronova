@@ -5,6 +5,7 @@ import '../../data/repositories/repositories.dart';
 import '../../services/exif_service.dart';
 import '../../services/location_service.dart';
 import '../../services/photo_import_service.dart';
+import '../../services/routing_service.dart';
 
 // ─── Service Providers ──────────────────────────────────────────
 
@@ -20,6 +21,10 @@ final photoImportServiceProvider = Provider<PhotoImportService>((ref) {
     photoRepository: ref.watch(photoRepositoryProvider),
   );
 });
+
+final routingServiceProvider = Provider<RoutingService>(
+  (ref) => RoutingService(),
+);
 
 // ─── Repository Providers ───────────────────────────────────────
 

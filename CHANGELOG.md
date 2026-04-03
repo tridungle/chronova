@@ -1,5 +1,40 @@
 # Changelog
 
+## Session 6 — 2026-04-03 (Video Export Routing Enhancement)
+
+### Added
+
+- **Real road-following routes** — Video export now fetches actual road geometry from the OSRM (Open Source Routing Machine) public API instead of drawing straight lines between photo waypoints. Supports batching for trips with 80+ waypoints.
+- **Transport mode selector** — Users can choose between Car, Walking, Cycling, and Plane modes. Car/Walking/Cycling fetch real routes from OSRM; Plane uses straight lines with intermediate interpolation points every ~50km for smooth animation.
+- **Progressive path reveal** — The polyline is drawn progressively as the transport icon passes over it, creating a "drawing the path" visual effect during preview and export.
+- **Transport icon with heading** — An animated circular marker with the selected transport icon moves along the route, rotating based on the bearing/heading between consecutive path points.
+- **Ghost path preview** — When not animating, the full planned route is shown as a faint 20% opacity line so users can see the complete route before starting.
+- **Route loading overlay** — Semi-transparent overlay with spinner and "Calculating route..." text while OSRM API call is in progress.
+- **Route error banner** — Orange warning bar with "Route unavailable — using straight lines" message and Retry button when OSRM fails.
+- **Uniform-speed animation** — Animation now uses cumulative distance along the routed path (with binary search interpolation) for consistent travel speed, replacing the old segment-based approach that had inconsistent speeds for segments of different lengths.
+- **Route distance display** — Estimated output info now shows total route distance in km alongside duration and frame count.
+- `RoutingService` class (`lib/services/routing_service.dart`) — OSRM API integration with batching, plane straight-line fallback, and graceful error handling.
+- `TransportMode` enum — Car, Walking, Cycling, Plane with icons and OSRM profile names.
+- `routingServiceProvider` in `app_providers.dart`.
+
+### Changed
+
+- **Video export screen fully rewritten** — Replaced original segment-based interpolation with distance-based uniform-speed animation. Removed unused `_showLocationLabels` toggle (had no implementation). Now uses `AppConstants.defaultAnimationSpeedSec` for initial speed value.
+- Extracted map preview, settings panel, and empty state into separate builder methods for readability.
+
+### Dependencies
+
+- Added `http` package (promoted from transitive to direct dependency) for OSRM API calls.
+
+### Tests
+
+- Added 16 new unit tests for `RoutingService` and `TransportMode`:
+  - TransportMode: enum values, properties, labels, icons, OSRM profile names
+  - RoutingService: empty/single input handling, plane mode interpolation (long/short distances, multi-waypoint), road-based mode fallback (car/walking/cycling with proximity checks)
+- Total tests: **93** (up from 77).
+
+---
+
 ## Session 5 — 2026-04-03 (Runtime Bug Fixes & Regression Tests)
 
 ### Fixed (Critical)
