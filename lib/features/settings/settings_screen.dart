@@ -404,13 +404,13 @@ class _RescanExifDialogState extends State<_RescanExifDialog> {
 
       try {
         // Check if file still exists
-        final file = File(photo.filePath);
+        final file = File(photo.resolvedFilePath);
         if (!await file.exists()) {
           _skipped++;
           continue;
         }
 
-        final exif = await exifService.extractFromFile(photo.filePath);
+        final exif = await exifService.extractFromFile(photo.resolvedFilePath);
 
         // Only update if EXIF had useful data
         if (exif.hasDate || exif.hasLocation || exif.cameraModel != null) {

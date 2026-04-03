@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -10,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/extensions/extensions.dart';
 import '../../core/providers/app_providers.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../../core/utils/photo_path_resolver.dart';
 import '../../core/widgets/error_retry_widget.dart';
 import '../../core/widgets/shimmer_loading.dart';
 import '../../data/models/models.dart';
@@ -180,7 +179,9 @@ class _TripCard extends ConsumerWidget {
                 child:
                     trip.coverPhotoPath != null
                         ? Image.file(
-                          File(trip.coverPhotoPath!),
+                          PhotoPathResolver.instance.resolveFile(
+                            trip.coverPhotoPath!,
+                          ),
                           fit: BoxFit.cover,
                           height: double.infinity,
                           errorBuilder:

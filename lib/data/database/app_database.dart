@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/photo_path_resolver.dart';
 
 /// SQLite database helper — singleton for the entire app lifecycle.
 ///
@@ -58,7 +59,8 @@ class AppDatabase {
     );
   }
 
-  /// Ensures the DB schema has all expected columns.
+  /// Ensures the DB schema has all expected columns and migrates stale
+  /// absolute file paths to relative paths.
   ///
   /// This runs on the first `database` access per app session, even if
   /// the cached `_database` instance pre-dates a code change that added
@@ -76,8 +78,60 @@ class AppDatabase {
         );
         debugPrint('AppDatabase: added file_hash column via _ensureSchema');
       }
+
+      // Migrate absolute file_path values to relative paths.
+      // This fixes the iOS sandbox UUID change issue where absolute paths
+      // become stale after Xcode rebuild / reinstall.
+      await _migrateToRelativePaths(db);
     } catch (e) {
       debugPrint('AppDatabase: _ensureSchema failed: $e');
+    }
+  }
+
+  /// Convert any absolute `file_path` values in the photos table to relative
+  /// paths (e.g., `photos/<uuid>.jpg`). This is idempotent — already-relative
+  /// paths are left untouched.
+  Future<void> _migrateToRelativePaths(Database db) async {
+    try {
+      // Find all photos with absolute paths (start with '/')
+      final rows = await db.query(
+        'photos',
+        columns: ['id', 'file_path'],
+        where: "file_path LIKE '/%'",
+      );
+
+      if (rows.isEmpty) return;
+
+      final resolver = PhotoPathResolver.instance;
+      // Ensure resolver is initialised (should already be from main.dart)
+      await resolver.init();
+
+      final batch = db.batch();
+      int migrated = 0;
+
+      for (final row in rows) {
+        final id = row['id'] as String;
+        final absolutePath = row['file_path'] as String;
+        final relativePath = resolver.toRelative(absolutePath);
+
+        // Only update if the path actually changed
+        if (relativePath != absolutePath) {
+          batch.update(
+            'photos',
+            {'file_path': relativePath},
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          migrated++;
+        }
+      }
+
+      if (migrated > 0) {
+        await batch.commit(noResult: true);
+        debugPrint('AppDatabase: migrated $migrated photo paths to relative');
+      }
+    } catch (e) {
+      debugPrint('AppDatabase: path migration failed: $e');
     }
   }
 

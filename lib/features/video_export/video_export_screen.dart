@@ -752,14 +752,14 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
                         itemBuilder: (ctx, i) {
                           final photo = reorderedPhotos[i];
                           return ListTile(
-                            key: ValueKey(photo.filePath),
+                            key: ValueKey(photo.resolvedFilePath),
                             leading: ClipRRect(
                               borderRadius: BorderRadius.circular(6),
                               child: SizedBox(
                                 width: 44,
                                 height: 44,
                                 child: Image.file(
-                                  File(photo.filePath),
+                                  File(photo.resolvedFilePath),
                                   fit: BoxFit.cover,
                                   errorBuilder:
                                       (_, __, ___) => Container(
@@ -1077,7 +1077,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
                           width: 60,
                           height: 60,
                           child: Image.file(
-                            File(_currentPopupPhoto!.filePath),
+                            File(_currentPopupPhoto!.resolvedFilePath),
                             fit: BoxFit.cover,
                           ),
                         ),

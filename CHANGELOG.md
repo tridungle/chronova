@@ -1,5 +1,36 @@
 # Changelog
 
+## Session 12 — 2026-04-03 (Trip Import Fix, Assign Photos & Photo Path Resolution)
+
+### Fixed
+
+- **Photos imported from trip detail not assigned to trip** — The "Import Photos" button on the trip detail screen navigated to `/import` without passing the `tripId`, so imported photos had `tripId: null` and never appeared in the trip. Fixed by passing `tripId` via `GoRouter.extra` to `PhotoImportScreen`, which now forwards it to all import service methods. The import result "Done" button also invalidates trip-specific providers so the trip detail refreshes.
+- **"No Photos Selected" shown when all imports are duplicates** — Now shows "All Duplicates" with an explanatory subtitle instead of the generic message.
+- **Broken photo display after Xcode rebuild/reinstall** — On iOS, the app sandbox container UUID changes on every Xcode rebuild/reinstall, invalidating all absolute file paths stored in the database. The photo files still exist under the new container path, but the DB has stale absolute paths pointing to the old UUID. Created `PhotoPathResolver` singleton that stores relative paths and resolves them at runtime. Added automatic DB migration to convert existing absolute paths to relative. Updated all 14 `Image.file`/`FileImage` display sites to use `photo.resolvedFilePath`.
+
+### Added
+
+- **`PhotoPathResolver` utility** (`lib/core/utils/photo_path_resolver.dart`) — Singleton that caches `getApplicationDocumentsDirectory()` path, converts between relative and absolute paths, and handles stale sandbox UUID paths transparently.
+- **`Photo.resolvedFilePath` getter** — Resolves the stored (potentially relative or stale) file path to a valid current absolute path via `PhotoPathResolver`.
+- **`AppDatabase._migrateToRelativePaths()`** — Automatic migration that finds all photos with absolute paths (`file_path LIKE '/%'`), converts them to relative using `PhotoPathResolver.toRelative()`, and batch-updates the DB. Runs as part of `_ensureSchema()` on first DB access per session.
+- **Assign existing photos to trip** — New bottom sheet on the trip detail screen (`_AssignPhotosSheet`) shows all unassigned photos in a selectable grid. Users can pick individual photos or "Select All", then assign them to the current trip.
+- **"Add photos" popup menu in trip detail app bar** — `PopupMenuButton` with "Import New Photos" and "Assign Existing Photos" options.
+
+### Changed
+
+- **`PhotoImportService` now stores relative paths** — Photo file paths are stored as `photos/<uuid>.jpg` instead of absolute paths, making the DB portable across sandbox UUID changes.
+- **`main.dart` initializes `PhotoPathResolver` at startup** — `await PhotoPathResolver.instance.init()` runs before `runApp` to cache the documents directory path.
+- **`PhotoImportScreen` accepts optional `tripId`** — When provided, all import paths forward it to the service so photos are created with `tripId` set.
+- **`/import` route accepts `tripId` via `GoRouter.extra`** — Router extracts `tripId` from `state.uri.queryParameters` or `state.extra`.
+- **Trip detail empty state improved** — Now shows two buttons: "Import Photos" (with `tripId`) and "Assign Existing Photos".
+- Updated all 14 photo display sites across 10 files to use `photo.resolvedFilePath` instead of `photo.filePath`.
+
+### Dependencies
+
+- Added `file_picker: ^8.0.0` for file system import support (from Session 11, included in this release).
+
+---
+
 ## Session 11 — 2026-04-03 (Bug Fixes & Import Enhancements)
 
 ### Fixed

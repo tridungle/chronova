@@ -479,7 +479,7 @@ class _AssignPhotosSheetState extends ConsumerState<_AssignPhotosSheet> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: Image.file(
-                                File(photo.filePath),
+                                File(photo.resolvedFilePath),
                                 fit: BoxFit.cover,
                                 cacheWidth: 200,
                                 errorBuilder:

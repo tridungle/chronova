@@ -203,7 +203,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 ),
                                 child: ClipOval(
                                   child: Image.file(
-                                    File(photo.filePath),
+                                    File(photo.resolvedFilePath),
                                     fit: BoxFit.cover,
                                     errorBuilder:
                                         (_, __, ___) => Container(
@@ -408,7 +408,7 @@ class _PhotoPopup extends StatelessWidget {
                 child: Hero(
                   tag: 'photo_${photo.id}',
                   child: Image.file(
-                    File(photo.filePath),
+                    File(photo.resolvedFilePath),
                     fit: BoxFit.cover,
                     errorBuilder:
                         (_, __, ___) => Container(

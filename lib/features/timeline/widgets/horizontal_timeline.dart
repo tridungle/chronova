@@ -225,7 +225,7 @@ class _HorizontalDayCard extends StatelessWidget {
                         Hero(
                           tag: 'photo_${primaryPhoto.id}',
                           child: Image.file(
-                            File(primaryPhoto.filePath),
+                            File(primaryPhoto.resolvedFilePath),
                             fit: BoxFit.cover,
                             errorBuilder:
                                 (_, __, ___) => Container(
@@ -459,7 +459,7 @@ class _HorizontalDayCard extends StatelessWidget {
                     width: 44,
                     height: 44,
                     child: Image.file(
-                      File(photos[i].filePath),
+                      File(photos[i].resolvedFilePath),
                       fit: BoxFit.cover,
                       errorBuilder:
                           (_, __, ___) => Container(color: Colors.grey[300]),
@@ -584,7 +584,7 @@ class _HorizontalDayCard extends StatelessWidget {
                       width: 40,
                       height: 40,
                       child: Image.file(
-                        File(photo.filePath),
+                        File(photo.resolvedFilePath),
                         fit: BoxFit.cover,
                         errorBuilder:
                             (_, __, ___) => Container(color: Colors.grey[300]),

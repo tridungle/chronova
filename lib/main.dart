@@ -6,10 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/providers/app_providers.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_router.dart';
+import 'core/utils/photo_path_resolver.dart';
 import 'features/onboarding/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialise the photo path resolver early so resolvedFilePath works
+  await PhotoPathResolver.instance.init();
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([

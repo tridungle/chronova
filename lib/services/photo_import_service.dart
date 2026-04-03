@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../core/utils/photo_path_resolver.dart';
 import '../data/models/photo.dart';
 import '../data/repositories/photo_repository.dart';
 import 'exif_service.dart';
@@ -170,13 +171,18 @@ class PhotoImportService {
         final destPath = p.join(photosDir.path, '$id$ext');
         await file.copy(destPath);
 
+        // Store relative path in DB so it survives sandbox UUID changes
+        final resolver = PhotoPathResolver.instance;
+        await resolver.init();
+        final relativePath = resolver.toRelative(destPath);
+
         // Get file size
         final fileSize = await file.length();
 
         final now = DateTime.now();
         final photo = Photo(
           id: id,
-          filePath: destPath,
+          filePath: relativePath,
           tripId: tripId,
           dateTaken: exif.dateTaken,
           latitude: exif.latitude,

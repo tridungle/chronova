@@ -150,7 +150,7 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
               builder: (context, index) {
                 final photo = _photos[index];
                 return PhotoViewGalleryPageOptions(
-                  imageProvider: FileImage(File(photo.filePath)),
+                  imageProvider: FileImage(File(photo.resolvedFilePath)),
                   minScale: PhotoViewComputedScale.contained,
                   maxScale: PhotoViewComputedScale.covered * 3,
                   heroAttributes: PhotoViewHeroAttributes(

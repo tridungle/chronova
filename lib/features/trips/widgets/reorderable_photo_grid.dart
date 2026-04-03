@@ -187,7 +187,7 @@ class _ReorderablePhotoTile extends StatelessWidget {
                     width: 60,
                     height: 60,
                     child: Image.file(
-                      File(photo.filePath),
+                      File(photo.resolvedFilePath),
                       fit: BoxFit.cover,
                       errorBuilder:
                           (_, __, ___) => Container(

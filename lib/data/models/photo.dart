@@ -1,3 +1,5 @@
+import '../../core/utils/photo_path_resolver.dart';
+
 /// Sentinel value used by copyWith to distinguish "not provided" from "null".
 const _absent = Object();
 
@@ -52,6 +54,10 @@ class Photo {
 
   /// Whether this photo has a date taken
   bool get hasDate => dateTaken != null;
+
+  /// Resolve [filePath] (which may be relative or a stale absolute path)
+  /// to a valid absolute path under the current app documents directory.
+  String get resolvedFilePath => PhotoPathResolver.instance.resolve(filePath);
 
   /// Get list of tags
   List<String> get tagList =>

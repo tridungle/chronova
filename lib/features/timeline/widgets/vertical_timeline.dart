@@ -375,7 +375,7 @@ class _DayCard extends StatelessWidget {
                         width: 52,
                         height: 52,
                         child: Image.file(
-                          File(photo.filePath),
+                          File(photo.resolvedFilePath),
                           fit: BoxFit.cover,
                           errorBuilder:
                               (_, __, ___) =>
@@ -443,7 +443,7 @@ class _SinglePhoto extends StatelessWidget {
         child: AspectRatio(
           aspectRatio: 16 / 10,
           child: Image.file(
-            File(photo.filePath),
+            File(photo.resolvedFilePath),
             fit: BoxFit.cover,
             errorBuilder:
                 (_, __, ___) => Container(
@@ -578,7 +578,7 @@ class _PhotoCollage extends StatelessWidget {
               tag: '${heroTagPrefix}_${photo.id}',
               child: SizedBox.expand(
                 child: Image.file(
-                  File(photo.filePath),
+                  File(photo.resolvedFilePath),
                   fit: BoxFit.cover,
                   errorBuilder:
                       (_, __, ___) => Container(
