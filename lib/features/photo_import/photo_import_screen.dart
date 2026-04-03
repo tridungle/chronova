@@ -64,6 +64,8 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
+                    // Invalidate providers first, then pop.
+                    // Capture navigator before any async-like gap.
                     ref.invalidate(allPhotosProvider);
                     ref.invalidate(timelineDaysProvider);
                     ref.invalidate(geoPhotosProvider);
@@ -74,7 +76,13 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
                       ref.invalidate(tripTimelineDaysProvider(widget.tripId!));
                       ref.invalidate(tripPhotoCountProvider(widget.tripId!));
                     }
-                    context.pop();
+                    // Use addPostFrameCallback to pop AFTER the current
+                    // frame completes, avoiding _dependents.isEmpty assertion
+                    // that fires when pop deactivates elements while providers
+                    // are still notifying.
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) context.pop();
+                    });
                   },
                   child: const Text('Done'),
                 ),
@@ -97,6 +105,7 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
         tripId: widget.tripId,
         onProgress: _onProgress,
       );
+      if (!mounted) return;
       await _postImport(result);
     } catch (e) {
       _handleImportError(e);
@@ -115,6 +124,7 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
         tripId: widget.tripId,
         onProgress: _onProgress,
       );
+      if (!mounted) return;
       await _postImport(result);
     } catch (e) {
       _handleImportError(e);
@@ -159,12 +169,14 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
         return;
       }
 
+      if (!mounted) return;
       final importService = ref.read(photoImportServiceProvider);
       final result = await importService.importFromPaths(
         paths: paths,
         tripId: widget.tripId,
         onProgress: _onProgress,
       );
+      if (!mounted) return;
       await _postImport(result);
     } catch (e) {
       _handleImportError(e);
@@ -184,19 +196,21 @@ class _PhotoImportScreenState extends ConsumerState<PhotoImportScreen> {
   Future<void> _postImport(ImportResult result) async {
     // Reverse geocode photos with GPS data
     if (result.withGps > 0) {
-      if (mounted) {
-        setState(() => _statusMessage = 'Resolving locations...');
-      }
+      if (!mounted) return;
+      setState(() => _statusMessage = 'Resolving locations...');
+
       final locationService = ref.read(locationServiceProvider);
       final photoRepo = ref.read(photoRepositoryProvider);
 
       for (final photo in result.photos) {
+        if (!mounted) return; // Guard inside the loop
         if (photo.hasLocation) {
           try {
             final name = await locationService.getLocationName(
               photo.latitude!,
               photo.longitude!,
             );
+            if (!mounted) return;
             if (name != null) {
               await photoRepo.update(
                 photo.copyWith(locationName: name, updatedAt: DateTime.now()),

@@ -839,7 +839,10 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
       ),
       body: geoPhotos.when(
         data: (photos) {
-          // Update data only when not animating/exporting
+          // Update data only when not animating/exporting.
+          // Side-effects are deferred to addPostFrameCallback to avoid
+          // triggering setState during the build phase, which can cause
+          // "dirty widget in wrong build scope" assertions.
           if (!_isPreviewPlaying && !_isExporting) {
             final newPhotos = photos.where((p) => p.hasLocation).toList();
             final newWaypoints =
@@ -849,8 +852,10 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
 
             // Re-fetch route if waypoints changed
             if (!_listEquals(newWaypoints, _waypoints)) {
-              // Apply saved waypoint order (async — fires route fetch after)
+              // Apply saved waypoint order (async — fires route fetch after).
+              // Captured in a local to avoid closure over stale widget state.
               WidgetsBinding.instance.addPostFrameCallback((_) async {
+                if (!mounted) return;
                 final orderedPhotos = await _applySavedOrder(newPhotos);
                 if (!mounted) return;
                 setState(() {
@@ -860,6 +865,7 @@ class _VideoExportScreenState extends ConsumerState<VideoExportScreen>
                           .map((p) => LatLng(p.latitude!, p.longitude!))
                           .toList();
                 });
+                if (!mounted) return;
                 if (_waypoints.length >= 2) {
                   _fetchRoute();
                 }

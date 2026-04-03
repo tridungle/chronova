@@ -446,11 +446,20 @@ class _RescanExifDialogState extends State<_RescanExifDialog> {
 
     if (!mounted) return;
 
-    // Invalidate providers so UI refreshes with new data
-    widget.ref.invalidate(allPhotosProvider);
-    widget.ref.invalidate(geoPhotosProvider);
-    widget.ref.invalidate(timelineDaysProvider);
-    widget.ref.invalidate(photoCountProvider);
+    // Invalidate providers so UI refreshes with new data.
+    // Guard: widget.ref may be stale if the parent ConsumerWidget
+    // that opened this dialog has been disposed. The mounted check
+    // above covers our own State, but widget.ref belongs to the
+    // parent SettingsScreen — if the user navigated away, accessing
+    // it could throw. Wrap in try/catch as a safety net.
+    try {
+      widget.ref.invalidate(allPhotosProvider);
+      widget.ref.invalidate(geoPhotosProvider);
+      widget.ref.invalidate(timelineDaysProvider);
+      widget.ref.invalidate(photoCountProvider);
+    } catch (_) {
+      // Parent widget disposed — providers will refresh when revisited.
+    }
 
     setState(() {
       _isRunning = false;

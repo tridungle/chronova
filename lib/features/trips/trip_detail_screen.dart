@@ -266,10 +266,13 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                   );
 
                   await ref.read(tripRepositoryProvider).update(updated);
+
+                  // Guard after await — dialog or parent may be disposed
+                  if (!ctx.mounted) return;
                   ref.invalidate(tripsProvider);
                   ref.invalidate(tripProvider(tripId));
 
-                  if (ctx.mounted) Navigator.pop(ctx);
+                  Navigator.pop(ctx);
                   if (context.mounted) {
                     context.showSnackBar('Trip updated');
                   }
@@ -316,12 +319,15 @@ class _TripDetailScreenState extends ConsumerState<TripDetailScreen> {
                   // Delete the trip
                   await ref.read(tripRepositoryProvider).delete(tripId);
 
+                  // Guard after await — dialog or parent may be disposed
+                  if (!ctx.mounted) return;
+
                   // Refresh providers
                   ref.invalidate(tripsProvider);
                   ref.invalidate(allPhotosProvider);
                   ref.invalidate(timelineDaysProvider);
 
-                  if (ctx.mounted) Navigator.pop(ctx);
+                  Navigator.pop(ctx);
                   if (context.mounted) {
                     context.showSnackBar('Trip deleted');
                     context.pop(); // Go back to trips list
@@ -602,16 +608,20 @@ class _AssignPhotosSheetState extends ConsumerState<_AssignPhotosSheet> {
     setState(() => _isAssigning = true);
 
     try {
+      final count = _selected.length;
       await ref
           .read(photoRepositoryProvider)
           .assignToTrip(_selected.toList(), widget.tripId);
 
       if (mounted) {
+        // Capture ScaffoldMessenger BEFORE popping, since pop may
+        // deactivate the context making ScaffoldMessenger.of() throw.
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Assigned ${_selected.length} photo${_selected.length == 1 ? '' : 's'} to trip',
+              'Assigned $count photo${count == 1 ? '' : 's'} to trip',
             ),
           ),
         );

@@ -83,7 +83,11 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
     if (confirmed != true || !mounted) return;
 
     HapticFeedback.heavyImpact();
+    final deletedTripId = _currentPhoto.tripId;
     await ref.read(photoRepositoryProvider).delete(_currentPhoto.id);
+
+    // Guard: the widget may have been disposed during the async gap.
+    if (!mounted) return;
 
     // Refresh providers
     ref.invalidate(allPhotosProvider);
@@ -94,14 +98,11 @@ class _PhotoDetailScreenState extends ConsumerState<PhotoDetailScreen> {
     ref.invalidate(journalEntriesProvider);
 
     // Invalidate trip-specific providers if the photo belonged to a trip
-    final deletedTripId = _currentPhoto.tripId;
     if (deletedTripId != null) {
       ref.invalidate(tripPhotosProvider(deletedTripId));
       ref.invalidate(tripTimelineDaysProvider(deletedTripId));
       ref.invalidate(tripPhotoCountProvider(deletedTripId));
     }
-
-    if (!mounted) return;
 
     // If this was the only photo, pop the screen
     if (_photos.length <= 1) {

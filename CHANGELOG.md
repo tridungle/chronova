@@ -9,6 +9,17 @@
 - **Updating a note/mood does not update UI until pull-to-refresh** — After saving a journal note, `journal_editor.dart` only invalidated `allPhotosProvider`, `timelineDaysProvider`, and `journalEntriesProvider`. Missing invalidations for trip-specific providers (`tripPhotosProvider`, `tripTimelineDaysProvider`, `tripJournalEntriesProvider`). Added conditional invalidations when `widget.tripId` is non-null.
 - **Photo detail overlay shows stale note/mood after journal edit** — `_openJournal()` was fire-and-forget, so the local `_photos` list in `PhotoDetailScreen` still held old `Photo` objects after the journal editor saved. Changed `_openJournal()` to `async`, awaits the bottom sheet, then reloads the current photo from DB via `PhotoRepository.getById()` and calls `setState` to update the local list.
 - **No UNIQUE constraint on `file_hash` allowing DB-level duplicates** — The `file_hash` column had a non-unique index, so if the dedup check failed for any reason (column missing, race condition, null hashes from pre-hash imports), duplicate rows could be inserted with different UUIDs. Added `CREATE UNIQUE INDEX ... ON photos(file_hash) WHERE file_hash IS NOT NULL` in `_onCreate`, `_onUpgrade`, `_onOpen`, and `_ensureSchema`.
+- **RenderFlex overflow (~99445px) in horizontal timeline mode** — `RefreshIndicator` wrapped `AnimatedSwitcher` containing `HorizontalTimeline`, a non-scrollable `Column`. `RefreshIndicator` requires a scrollable child; without one the inner column was unconstrained causing massive overflow. Fixed by conditionally skipping `RefreshIndicator` in horizontal mode — only vertical timeline (which uses `ListView`) gets the pull-to-refresh wrapper.
+- **`_dependents.isEmpty` assertion & "dirty widget in wrong build scope"** — Multiple async callbacks across the app called `ref.invalidate()`, `ref.read()`, or accessed `context` after `await` without checking `mounted`, triggering framework assertions when the widget had already been disposed/deactivated:
+  - `photo_detail_screen.dart` `_deletePhoto()`: moved `if (!mounted) return` to immediately after `await delete()`, before any `ref.invalidate()` calls. Captured `tripId` before the async gap.
+  - `journal_editor.dart` `_save()`: added `if (!mounted) return` before all `ref.invalidate()` calls after the DB writes.
+  - `photo_import_screen.dart` `_postImport()`: added `if (!mounted) return` guard inside the geocoding loop body (before and after each `await`).
+  - `photo_import_screen.dart` Done button: separated `ref.invalidate()` from `context.pop()` using `addPostFrameCallback` to avoid deactivating elements while providers are still notifying.
+  - `photo_import_screen.dart` `_pickFromGallery`/`_takePhoto`/`_pickFromFiles`: added `if (!mounted) return` after each `await` before calling `ref.read()` or `_postImport()`.
+  - `trip_detail_screen.dart` `_assignSelected()`: captured `ScaffoldMessenger.of(context)` before `Navigator.pop(context)` to avoid accessing a deactivated context.
+  - `trip_detail_screen.dart` edit/delete dialog callbacks: added `if (!ctx.mounted) return` after `await` before `ref.invalidate()` calls.
+  - `settings_screen.dart` `_runRescan()`: wrapped `widget.ref.invalidate()` calls in try/catch since the parent `ConsumerWidget` may have been disposed.
+  - `video_export_screen.dart` `.when(data:)`: added extra `if (!mounted) return` guards before and after async operations inside `addPostFrameCallback`.
 
 ### Changed
 

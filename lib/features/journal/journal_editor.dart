@@ -247,6 +247,9 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
         }
       }
 
+      // Guard: the widget may have been disposed during the async gap.
+      if (!mounted) return;
+
       // Refresh data
       ref.invalidate(allPhotosProvider);
       ref.invalidate(timelineDaysProvider);
@@ -260,7 +263,7 @@ class _JournalEditorState extends ConsumerState<JournalEditor> {
       }
 
       HapticFeedback.lightImpact();
-      if (mounted) Navigator.pop(context);
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         context.showSnackBar('Failed to save: $e', isError: true);

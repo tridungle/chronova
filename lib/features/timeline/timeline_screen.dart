@@ -72,6 +72,19 @@ class TimelineScreen extends ConsumerWidget {
                     days: days,
                   );
 
+          // RefreshIndicator requires a scrollable child.
+          // HorizontalTimeline is a Column (non-scrollable) so we skip
+          // the RefreshIndicator wrapper for horizontal mode to prevent
+          // a RenderFlex overflow (~99445px).
+          final animatedChild = AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            child: timelineChild,
+          );
+
+          if (!isVertical) return animatedChild;
+
           return RefreshIndicator(
             onRefresh: () async {
               HapticFeedback.mediumImpact();
@@ -79,12 +92,7 @@ class TimelineScreen extends ConsumerWidget {
               // Wait for the provider to settle
               await ref.read(timelineDaysProvider.future);
             },
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 400),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child: timelineChild,
-            ),
+            child: animatedChild,
           );
         },
         loading: () => SkeletonLoaders.timeline(context),
